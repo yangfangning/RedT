@@ -236,9 +236,9 @@ RC YCSBTxnManager::send_remote_subtxn() {
 
 RC YCSBTxnManager::run_txn(yield_func_t &yield, uint64_t cor_id) {
 
-	RC rc = RCOK;
+	RC rc = txn->rc;
 	assert(CC_ALG != CALVIN);
-	if(IS_LOCAL(txn->txn_id) && state == YCSB_0 && next_record_id == 0) {
+	if(IS_LOCAL(txn->txn_id) && state == YCSB_0 && next_record_id == 0 && rc != Abort) {
 		DEBUG("Running txn %ld\n",txn->txn_id);
 		query->partitions_touched.add_unique(GET_PART_ID(0,g_node_id));
 #if PARAL_SUBTXN
@@ -250,18 +250,15 @@ RC YCSBTxnManager::run_txn(yield_func_t &yield, uint64_t cor_id) {
 	uint64_t starttime = get_sys_clock();
 
 	while(rc == RCOK && !is_done()) {
-#if CC_ALG == WOUND_WAIT
+		rc = run_txn_state(yield, cor_id);
+#if CC_ALG == WOUND_WAIT || CC_ALG == MV_WOUND_WAIT
 		if (txn_state == WOUNDED) {
 			rc = Abort;
 			break;
 		}  
 #endif
-		rc = run_txn_state(yield, cor_id);
+		
 	}
-#if CC_ALG == WOUND_WAIT
-	if (txn_state == WOUNDED) 
-		rc = Abort;
-#endif
 
     if(rc == Abort) total_num_atomic_retry++;
 	uint64_t curr_time = get_sys_clock();
@@ -289,9 +286,6 @@ RC YCSBTxnManager::run_txn(yield_func_t &yield, uint64_t cor_id) {
 	}else{
 		if(rsp_cnt > 0) return WAIT;
 		if(is_done()){
-#if CC_ALG == WOUND_WAIT
-			txn_state = STARTCOMMIT;
-#endif
 			rc = start_commit(yield, cor_id);
 		}
 	}

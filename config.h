@@ -180,13 +180,16 @@
 /***********************************************/
 
 #define ISOLATION_LEVEL SERIALIZABLE
+//并发控制WAIT_DIE, NO_WAIT, DL_DETECT, TIMESTAMP, MVCC, HSTORE, OCC, VLL, SUNDIAL, SILO, BOCC, FOCC, SSI, WS
+//新增的并发控制MV_NO_WAIT，MV_WOUND_WAIT,MV_WAIT_DIE,MV_DL_DETECT
+#define CC_ALG MV_WOUND_WAIT
 
-#define CC_ALG NO_WAIT
+#define CLV CLV2
 
 #define YCSB_ABORT_MODE false
 #define QUEUE_C  APACITY_NEW 1000000
 
-#define USE_REPLICA true
+#define USE_REPLICA true//使用副本
 #define USE_TAPIR false
 #define MAJORITY true
 #define INTER_DC_CONTROL true
@@ -237,7 +240,7 @@
 #define KEY_ORDER         false
 // transaction roll back changes after abort
 #define ROLL_BACK         true
-// per-row lock/ts management or central lock/ts management
+// 集中锁/时间戳管理器 per-row lock/ts management or central lock/ts management
 #define CENTRAL_MAN         false
 #define BUCKET_CNT          31
 #define ABORT_PENALTY 10 * 1000000UL   // in ns.
@@ -482,7 +485,11 @@ enum PPSTxnType {
 #define PPS             3
 #define TEST            4
 #define DA 5
-// Concurrency Control Algorithm
+//可控锁冲突时机
+#define CLV3 3//增加一轮通信
+#define CLV2 2//收到提交操作后执行
+#define CLV1 1//正常时间提交
+// Concurrency Control Algorithm并发控制算法
 #define NO_WAIT           1
 #define WAIT_DIE          2
 #define DL_DETECT         3
@@ -499,7 +506,7 @@ enum PPSTxnType {
 // #define TICTOC     14
 // #define FOCC       15
 // #define BOCC       16
-// #define SSI        17
+#define SSI        17
 // #define WSI        18
 // #define DLI_BASE 19
 // #define DLI_OCC 20
@@ -529,6 +536,12 @@ enum PPSTxnType {
 // #define RDMA_MOCC 44
 // #define RDMA_TS 46
 // #define RDMA_DSLR_NO_WAIT 45
+//新增的并发控制方法
+#define MV_NO_WAIT           46
+#define MV_WAIT_DIE          47
+#define MV_DL_DETECT         48
+#define MV_WOUND_WAIT        49
+
 // TIMESTAMP allocation method.
 #define TS_MUTEX          1
 #define TS_CAS            2

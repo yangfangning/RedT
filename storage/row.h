@@ -53,6 +53,8 @@ class Row_occ;
 class Row_maat;
 class Row_specex;
 class Row_null;
+class Row_ssi;
+class Row_mv2pl;
 
 class row_t {
 public:
@@ -126,6 +128,10 @@ public:
 		Row_avoid * manager;
 	#elif CC_ALG == CNULL
 		Row_null * manager;
+	#elif CC_ALG == SSI
+    Row_ssi * manager;
+	#elif CC_ALG == MV_WOUND_WAIT || CC_ALG == MV_NO_WAIT || CC_ALG == MV_DL_DETECT
+    Row_mv2pl * manager;
 	#endif
 	int tuple_size;
 	table_t * table;

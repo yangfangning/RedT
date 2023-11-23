@@ -50,6 +50,8 @@
 #include "da_block_queue.h"
 #include "wl.h"
 
+#include "ssi.h"
+
 
 mem_alloc mem_allocator;
 Stats stats;
@@ -58,6 +60,8 @@ Manager glob_manager;
 Query_queue query_queue;
 Client_query_queue client_query_queue;
 OptCC occ_man;
+ssi ssi_man;
+InOutTable inout_table;
 Maat maat_man;
 Transport tport_man;
 Workload * m_wl;

@@ -40,13 +40,8 @@
 #include "pps_query.h"
 #include "array.h"
 #include "maat.h"
+#include "ssi.h"
 #include "manager.h"
-#include "transport.h"
-#include "routine.h"
-#include "lib.hh"
-#include "qps/op.hh"
-#include "src/sshed.hh"
-#include "global.h"
 
 void TxnStats::init() {
 	starttime=0;
@@ -73,7 +68,7 @@ void TxnStats::init() {
 	total_msg_queue_time = 0;
 	msg_queue_time = 0;
 	total_abort_time = 0;
-	log_start_time = 0;
+	log_start_time = 0;//redt里面没有，不知道作用
 	clear_short();
 }
 
@@ -254,6 +249,7 @@ void TxnStats::commit_stats(uint64_t thd_id, uint64_t txn_id, uint64_t batch_id,
 void Transaction::init() {
 	timestamp = UINT64_MAX;
 	start_timestamp = UINT64_MAX;
+	prepare_timestamp = UINT64_MAX;
 	end_timestamp = UINT64_MAX;
 	txn_id = UINT64_MAX;
 	batch_id = UINT64_MAX;
@@ -338,9 +334,7 @@ void TxnManager::init(uint64_t thd_id, Workload * h_wl) {
 	locking_done = false;
 	calvin_locked_rows.init(MAX_ROW_PER_TXN);
 #endif
-#if CC_ALG == WOUND_WAIT
 	txn_state = RUNNING;
-#endif
 	#if USE_TAPIR
 	 	prepare_count=0;
 		commit_count=0;
@@ -348,7 +342,6 @@ void TxnManager::init(uint64_t thd_id, Workload * h_wl) {
 	registed_ = false;
 	txn_ready = true;
 	twopl_wait_start = 0;
-	txn_state = 0;
 	txn_stats.init();
 
 	num_msgs_rw = 0;
@@ -368,12 +361,15 @@ void TxnManager::reset() {
 	fin_rsp_cnt = 0;
 	log_rsp_cnt = 0;
 	log_fin_rsp_cnt = 0;
-	txn_state = 0;
+	txn_state = RUNNING;
 	// aborted = false;
 	return_id = UINT64_MAX;
 	twopl_wait_start = 0;
 
-	num_msgs_rw = 0;
+    inconflict = 0;
+    onconflict = NULL;
+
+    num_msgs_rw = 0;
 	num_msgs_prep = 0;
 	num_msgs_commit = 0;
 	finish_read_write = false;
@@ -394,8 +390,9 @@ void TxnManager::reset() {
 	greatest_write_timestamp = 0;
 	greatest_read_timestamp = 0;
 	commit_timestamp = 0;
+    max_prepare_timestamp = 0;
 
-	start_rw_time = 0;
+    start_rw_time = 0;
 	start_logging_time = 0;
 	start_fin_time = 0;
 #if CC_ALG == MAAT
@@ -459,6 +456,10 @@ void TxnManager::reset_query() {
 	((PPSQuery*)query)->reset();
 #endif
 }
+//这个函数应该在全局创建的，而不是在某一个事务管理器里建立
+ONCONFLICT * TxnManager::creat_on_entry() {
+	return (ONCONFLICT *) mem_allocator.alloc(sizeof(ONCONFLICT));
+}
 
 RC TxnManager::commit(yield_func_t &yield, uint64_t cor_id) {
 // #if PARAL_SUBTXN
@@ -466,12 +467,16 @@ RC TxnManager::commit(yield_func_t &yield, uint64_t cor_id) {
 // #endif
 	assert(!aborted);
 	DEBUG("Commit %ld\n",get_txn_id());
-#if CC_ALG == WOUND_WAIT
-    txn_state = STARTCOMMIT;    
-#endif
+
 	release_locks(yield, RCOK, cor_id);
 #if CC_ALG == MAAT
 	time_table.release(get_thd_id(),get_txn_id());
+#endif
+
+#if CC_ALG == SSI
+    inout_table.set_commit_ts(get_thd_id(), get_txn_id(), get_commit_timestamp());
+    inout_table.set_state(get_thd_id(), get_txn_id(), SSI_COMMITTED);
+
 #endif
 	commit_stats();
 #if LOGGING
@@ -485,9 +490,13 @@ RC TxnManager::commit(yield_func_t &yield, uint64_t cor_id) {
 #endif
 	return Commit;
 }
-
+//终止操作
 RC TxnManager::abort(yield_func_t &yield, uint64_t cor_id) {
 	if (aborted) return Abort;
+#if CC_ALG == SSI
+    inout_table.set_state(get_thd_id(), get_txn_id(), SSI_ABORTED);
+    inout_table.clear_Conflict(get_thd_id(), get_txn_id());
+#endif
 	DEBUG("Abort %ld\n",get_txn_id());
 	//printf("Abort %ld\n",get_txn_id());
 	txn->rc = Abort;
@@ -550,7 +559,7 @@ RC TxnManager::start_abort(yield_func_t &yield, uint64_t cor_id) {
 	}
 #if USE_TAPIR
 	send_finish_messages();
-	txn_state = 2;
+	txn_state = COMMITING;
 	abort(yield, cor_id);
 	return Abort;
 // #elif CO_LOG
@@ -558,9 +567,9 @@ RC TxnManager::start_abort(yield_func_t &yield, uint64_t cor_id) {
 // 	return WAIT_REM;
 #else
 	if(query->partitions_touched.size() > 1) {
-		send_finish_messages();
-		abort(yield, cor_id);
-		return Abort;
+          send_finish_messages();
+          abort(yield, cor_id);
+          return Abort;
 	}
 	return abort(yield, cor_id);
 #endif
@@ -573,6 +582,9 @@ RC TxnManager::start_commit() {
 	_is_sub_txn = false;
 
 	rc = validate();
+	if(CC_ALG == SSI) {
+        ssi_man.gene_finish_ts(this);
+    }
 	if(rc == RCOK)
 		rc = commit();
 	else
@@ -594,7 +606,13 @@ RC TxnManager::start_commit(yield_func_t &yield, uint64_t cor_id) {
 
 #if USE_REPLICA
 	send_prepare_messages();
-	txn_state = 1;
+#if CC_ALG == MV_WOUND_WAIT || CC_ALG == MV_NO_WAIT
+    this->set_prepare_timestamp(get_next_ts());  
+	//直接更新本地最大prepare时间戳
+    this->set_max_prepare_timestamp(this->get_prepare_timestamp());
+#endif
+//本地事务的状态进入提交阶段中的prepa阶段
+	txn_state = PREPARE;
 #if !USE_TAPIR
 	if(has_local_write()){
 		log_replica(RLOG, g_node_id);
@@ -607,12 +625,13 @@ RC TxnManager::start_commit(yield_func_t &yield, uint64_t cor_id) {
 	if(query->partitions_touched.size() != 0)
 		return WAIT_REM;	
 #endif
+//这里没搞懂是要干嘛
 	assert(query->readonly());
 	assert(query->partitions_modified.size() == 0);	
 #endif
 
 	if(is_multi_part()) {
-		if (!query->readonly() || CC_ALG == OCC || CC_ALG == MAAT) {
+		if (!query->readonly() || CC_ALG == OCC || CC_ALG == MAAT || CC_ALG == SSI) {
 			// send prepare messages
 			send_prepare_messages();
 			rc = WAIT_REM;
@@ -631,16 +650,17 @@ RC TxnManager::start_commit(yield_func_t &yield, uint64_t cor_id) {
 			send_colog_messages();
 			rc = WAIT_REM;
 			return rc;
-#endif
+#else
 			send_finish_messages();
-			txn_state = 2;
+			txn_state = COMMITING;
 		#if !USE_TAPIR
 			// rsp_cnt = 0;
 		#endif
 			rc = commit(yield, cor_id);
+#endif
 		}
 	} 
-	else { // is not multi-part 
+	else { // is not multi-part ,实验时直接不设这种类型
 		rc = validate(yield, cor_id);
 		// rc = RCOK;
 		uint64_t finish_start_time = get_sys_clock();
@@ -653,6 +673,12 @@ RC TxnManager::start_commit(yield_func_t &yield, uint64_t cor_id) {
 		uint64_t prepare_timespan  = finish_start_time - txn_stats.prepare_start_time;
 		// INC_STATS(get_thd_id(), trans_prepare_time, prepare_timespan);
     	// INC_STATS(get_thd_id(), trans_prepare_count, 1);
+		if(CC_ALG == SSI) {
+            ssi_man.gene_finish_ts(this);
+        }
+		if (CC_ALG == MV_NO_WAIT || CC_ALG == MV_WOUND_WAIT){
+            this->set_commit_timestamp(this->get_start_timestamp());
+        }
 		if(rc == RCOK){ 
 			// printf("commit transaction\n");
 			// if(IS_LOCAL(get_txn_id())) {
@@ -662,11 +688,10 @@ RC TxnManager::start_commit(yield_func_t &yield, uint64_t cor_id) {
 			// }
 		#if USE_TAPIR
 			send_finish_messages();
-			txn_state = 2;
+			txn_state = COMMITING;
 		#endif
 			rc = commit(yield, cor_id);
-		}		
-		else {
+		}else {
 			txn->rc = Abort;
 			DEBUG("%ld start_abort\n",get_txn_id());
 // #if CO_LOG
@@ -781,6 +806,9 @@ void TxnManager::send_prepare_messages() {
 		// printf("%d:%d send prepare to %d\n", g_node_id, get_txn_id(), tar_nodes[i]);
 		msg_queue.enqueue(get_thd_id(), Message::create_message(this, RPREPARE),tar_nodes[i]);
 	}
+#if CLV == CLV3
+	pre_prepare_cnt = rsp_cnt;
+#endif
 #endif
 #else
 	rsp_cnt = query->partitions_touched.size() - 1;
@@ -804,6 +832,16 @@ void TxnManager::send_colog_messages() {
 	}
 }
 
+void TxnManager::send_co_ts_messages() {
+	assert(IS_LOCAL(get_txn_id()));
+	for(uint64_t i = 0; i < query->partitions_touched.size(); i++) {
+		if(GET_NODE_ID(query->partitions_touched[i]) == g_node_id) {
+			continue;
+    	}
+		msg_queue.enqueue(get_thd_id(), Message::create_message(this, SET_CO_TS),
+											GET_NODE_ID(query->partitions_touched[i]));
+	}
+}
 void TxnManager::send_finish_messages() {
 	// if(IS_LOCAL(get_txn_id())) {
 	// 	INC_STATS(get_thd_id(), trans_logging_count, 1);
@@ -963,6 +1001,12 @@ int TxnManager::received_response(RC rc) {
   if (rsp_cnt > 0) --rsp_cnt;
 #endif
 	return rsp_cnt;
+}
+int TxnManager::received_pre_response(RC rc) {
+	assert(txn->rc == RCOK || txn->rc == Abort);
+	if (txn->rc == RCOK) txn->rc = rc;
+  	if (pre_prepare_cnt > 0) --pre_prepare_cnt;
+	return pre_prepare_cnt;
 }
 
 int TxnManager::received_fin_response(RC rc) {
@@ -1160,6 +1204,13 @@ void TxnManager::set_start_timestamp(uint64_t start_timestamp) {
 
 ts_t TxnManager::get_start_timestamp() { return txn->start_timestamp; }
 
+ts_t TxnManager::get_prepare_timestamp() { return txn->prepare_timestamp; }
+
+void TxnManager::set_max_prepare_timestamp(uint64_t prepare_timestamp){
+	if(prepare_timestamp > max_prepare_timestamp){
+          max_prepare_timestamp = prepare_timestamp;
+    }
+}
 uint64_t TxnManager::incr_lr() {
 	//ATOM_ADD(this->rsp_cnt,i);
 	uint64_t result;
@@ -1168,7 +1219,7 @@ uint64_t TxnManager::incr_lr() {
 	sem_post(&rsp_mutex);
 	return result;
 }
-
+//功能未知，可能是用来判断是否需要唤醒事务的函数
 uint64_t TxnManager::decr_lr() {
 	//ATOM_SUB(this->rsp_cnt,i);
 	uint64_t result;
@@ -1202,6 +1253,23 @@ void TxnManager::release_last_row_lock() {
 	//txn->accesses[txn->row_cnt-1]->orig_row = NULL;
 }
 
+//退休函数
+void TxnManager::retire(yield_func_t &yield, uint64_t cor_id) {
+	ts_t starttime = get_sys_clock();
+	uint64_t row_cnt = txn->accesses.get_count();
+	assert(txn->accesses.get_count() == txn->row_cnt);
+	assert((WORKLOAD == YCSB && row_cnt <= g_req_per_query) || (WORKLOAD == TPCC && row_cnt <=
+	g_max_items_per_txn*2 + 3));
+	
+	for (int rid = row_cnt - 1; rid >= 0; rid --) {
+		row_t * orig_r = txn->accesses[rid]->orig_row;
+		access_t type = txn->accesses[rid]->type;
+		if (type == WR) {
+			orig_r->manager->retire(this, txn->accesses[rid]->data);
+		}
+	}
+}
+//终止的时候为XP，否则为WR
 void TxnManager::cleanup_row(yield_func_t &yield, RC rc, uint64_t rid, vector<vector<uint64_t>>& remote_access, uint64_t cor_id) {
 	access_t type = txn->accesses[rid]->type;
 	if (type == WR && rc == Abort && CC_ALG != MAAT) {
@@ -1214,20 +1282,22 @@ void TxnManager::cleanup_row(yield_func_t &yield, RC rc, uint64_t rid, vector<ve
 #if CC_ALG != CALVIN
 #if ISOLATION_LEVEL != READ_UNCOMMITTED
 	row_t * orig_r = txn->accesses[rid]->orig_row;
+	//如果回滚，且为单版本的话
 
-  if (ROLL_BACK && type == XP &&
+  	if (ROLL_BACK && type == XP &&
       (CC_ALG == DL_DETECT || CC_ALG == NO_WAIT || CC_ALG == WAIT_DIE || CC_ALG == HSTORE ||
       CC_ALG == HSTORE_SPEC || CC_ALG == WOUND_WAIT)) {
-    orig_r->return_row(rc,type, this, txn->accesses[rid]->orig_data); 
-  } else {
+    	orig_r->return_row(rc,type, this, txn->accesses[rid]->orig_data); //重点关注
+  	} else {
 #if ISOLATION_LEVEL == READ_COMMITTED
     if(type == WR) {
       version = orig_r->return_row(rc, type, this, txn->accesses[rid]->data);
     }
 #else
+//单版本提交或者为多版本回滚或提交
     version = orig_r->return_row(rc, type, this, txn->accesses[rid]->data);  
 #endif
-  }
+  	}
 #endif
 
 #if ROLL_BACK && \
@@ -1251,7 +1321,7 @@ void TxnManager::cleanup_row(yield_func_t &yield, RC rc, uint64_t rid, vector<ve
 		glob_manager.set_max_cts(_min_commit_ts);
 #endif
 
-  txn->accesses[rid]->data = NULL;
+   txn->accesses[rid]->data = NULL;
 }
 
 void TxnManager::cleanup(yield_func_t &yield, RC rc, uint64_t cor_id) {
@@ -1313,7 +1383,7 @@ RC TxnManager::get_row(yield_func_t &yield,row_t * row, access_t type, row_t *& 
 	get_access_end_time = get_sys_clock();
 	INC_STATS(get_thd_id(), trans_get_access_time, get_access_end_time - starttime);
 	INC_STATS(get_thd_id(), trans_get_access_count, 1);
-
+    //重点，这里的access，事务访问的行，新版本就是在这里加的
 	rc = row->get_row(yield,type, this, access,cor_id);
 	INC_STATS(get_thd_id(), trans_get_row_time, get_sys_clock() - get_access_end_time);
 	INC_STATS(get_thd_id(), trans_get_row_count, 1);
@@ -1407,7 +1477,7 @@ RC TxnManager::get_row_post_wait(row_t *& row_rtn) {
 
 	access->type = type;
 	access->orig_row = row;
-#if ROLL_BACK && (CC_ALG == DL_DETECT || CC_ALG == NO_WAIT || CC_ALG == WAIT_DIE)
+#if ROLL_BACK && (CC_ALG == DL_DETECT || CC_ALG == NO_WAIT || CC_ALG == WAIT_DIE || CC_ALG == MV_WOUND_WAIT)
 	if (type == WR) {
 		uint64_t part_id = row->get_part_id();
 		//printf("alloc 10 %ld\n",get_txn_id());
@@ -1460,7 +1530,7 @@ void TxnManager::insert_row(row_t * row, table_t * table) {
 	assert(txn->insert_rows.size() < MAX_ROW_PER_TXN);
 	txn->insert_rows.add(row);
 }
-
+//索引的读操作上层
 itemid_t *TxnManager::index_read(INDEX *index, idx_key_t key, int part_id) {
 	uint64_t starttime = get_sys_clock();
 
@@ -1490,7 +1560,7 @@ itemid_t *TxnManager::index_read(INDEX *index, idx_key_t key, int part_id, int c
 uint64_t TxnManager::get_return_node() {
 	return return_node;
 }
-
+//同步rlog日志或者rfinlog，只有rlog才是将local_log设为true
 void TxnManager::log_replica(RemReqType req_type,uint64_t ret_nid) {
 	assert(g_part_cnt==g_node_cnt);
 	return_node = ret_nid;
@@ -1532,7 +1602,8 @@ RC TxnManager::validate(yield_func_t &yield, uint64_t cor_id) {
 	RC rc = RCOK;
 	uint64_t starttime = get_sys_clock();
 	if (CC_ALG == OCC && rc == RCOK) rc = occ_man.validate(this);
-	if(CC_ALG == MAAT  && rc == RCOK) {
+	if (CC_ALG == SSI)  rc = ssi_man.validate(this);
+	if (CC_ALG == MAAT  && rc == RCOK) {
 		rc = maat_man.validate(this);
 		// Note: home node must be last to validate
 		if(IS_LOCAL(get_txn_id()) && rc == RCOK) {

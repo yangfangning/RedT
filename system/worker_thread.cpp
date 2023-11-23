@@ -36,6 +36,7 @@
 #include "transport.h"
 #include "routine.h"
 #include <boost/bind.hpp>
+#include "ssi.h"
 
 void WorkerThread::setup() {
 	if( get_thd_id() == 0) {
@@ -48,7 +49,7 @@ void WorkerThread::statqueue(uint64_t thd_id, Message * msg, uint64_t starttime)
   if (msg->rtype == RTXN_CONT ||
       msg->rtype == RQRY_RSP || msg->rtype == RACK_PREP  ||
       msg->rtype == RACK_FIN || msg->rtype == RTXN  ||
-      msg->rtype == CL_RSP) {
+      msg->rtype == CL_RSP || msg->rtype == RACK_PREP_CONT) {
     uint64_t queue_time = get_sys_clock() - starttime;
 		INC_STATS(thd_id,trans_local_process,queue_time);
   } else if (msg->rtype == RQRY || msg->rtype == RQRY_CONT ||
@@ -90,6 +91,9 @@ void WorkerThread::process(yield_func_t &yield, Message * msg, uint64_t cor_id) 
 			case RFIN:
         rc = process_rfin(yield, msg, cor_id);
 				break;
+      case SET_CO_TS:
+        rc = process_set_co_ts(yield, msg, cor_id);
+				break;
 			case RLOG:
         rc = process_rlog(yield, msg, cor_id);
 				break;
@@ -111,6 +115,12 @@ void WorkerThread::process(yield_func_t &yield, Message * msg, uint64_t cor_id) 
 			case RACK_PREP:
         rc = process_rack_prep(yield, msg, cor_id);
 				break;
+      case RACK_PRE_PREP:
+        rc = process_rack_pre_prep(yield, msg, cor_id);
+				break;
+      case RACK_PREP_CONT:
+        rc = process_rack_prep_cont(yield, msg, cor_id);
+				break;
 			case RACK_FIN:
         rc = process_rack_rfin(msg);
 				break;
@@ -119,7 +129,7 @@ void WorkerThread::process(yield_func_t &yield, Message * msg, uint64_t cor_id) 
 				break;
       case CL_QRY:
       case CL_QRY_O:
-			case RTXN:
+			case RTXN://1
 #if CC_ALG == CALVIN
         rc = process_calvin_rtxn(yield, msg, cor_id);
 #else
@@ -183,7 +193,7 @@ void WorkerThread::calvin_wrapup(yield_func_t &yield, uint64_t cor_id) {
   release_txn_man();
 }
 
-// Can't use txn_man after this function
+// Can't use txn_man after this function提交之后都不会使用txnmanager函数
 void WorkerThread::commit() {
   // printf("xxx txn %lu commit\n", txn_man->get_txn_id());
   DEBUG_T("COMMIT %ld -- %f\n", txn_man->get_txn_id(),
@@ -359,8 +369,8 @@ RC WorkerThread::run(yield_func_t &yield, uint64_t cor_id) {
     //uint64_t starttime = get_sys_clock();
     DEBUG_T("worker run txn %ld type %d \n", msg->get_txn_id(),msg->get_rtype());
     if((msg->rtype != CL_QRY && msg->rtype != CL_QRY_O && msg->rtype != RLOG && msg->rtype != RFIN_LOG) || CC_ALG == CALVIN) {
-      txn_man = get_transaction_manager(msg);
-      if(msg->rtype == RACK_LOG || msg->rtype == RACK_FIN_LOG || msg->rtype == RACK_FIN || msg->rtype == RACK_PREP
+      txn_man = get_transaction_manager(msg);//获取事务的管理器，没有就建一个
+      if(msg->rtype == RACK_LOG || msg->rtype == RACK_FIN_LOG || msg->rtype == RACK_FIN || msg->rtype == RACK_PREP || msg->rtype == RACK_PREP_CONT:
       //  || msg->rtype == RPREPARE
        ){ 
         // printf("txn %ld type %d check already commit\n", msg->get_txn_id(),msg->get_rtype());
@@ -370,11 +380,11 @@ RC WorkerThread::run(yield_func_t &yield, uint64_t cor_id) {
           DEBUG_T("txn %ld type %d already commit, query?%d, partitions_touched?%d, abort cnt %d, msg abort cnt %d\n", msg->get_txn_id(),msg->get_rtype(), !txn_man->query, txn_man->query->partitions_touched.size() == 0 , txn_man->abort_cnt, msg->current_abort_cnt);
           continue;
         }
-        else if (txn_man->txn_state == 2 && msg->rtype == RACK_PREP) {
+        else if (txn_man->txn_state == COMMITING && msg->rtype == RACK_PREP) {
           DEBUG_T("txn %ld type %d state %ld\n", msg->get_txn_id(),msg->get_rtype(), txn_man->txn_state);
           continue;
         }
-        else if (txn_man->txn_state == 3 && msg->rtype == RACK_FIN) {
+        else if (txn_man->txn_state == COMMIT && msg->rtype == RACK_FIN) {
           DEBUG_T("txn %ld type %d state %ld\n", msg->get_txn_id(),msg->get_rtype(), txn_man->txn_state);
           continue;
         }
@@ -453,7 +463,7 @@ RC WorkerThread::run(yield_func_t &yield, uint64_t cor_id) {
     // process(msg);  /// DA
     ready_starttime = get_sys_clock();
     if(txn_man) {
-      bool ready = txn_man->set_ready();
+      bool ready = txn_man->set_ready();//为真时，表明ready为假，
       if (!ready) {
         DEBUG_T("txn %ld type %d set ready failed, ready %d\n", msg->get_txn_id(),msg->get_rtype(), txn_man->txn_ready);
         assert(ready);
@@ -473,17 +483,31 @@ RC WorkerThread::run(yield_func_t &yield, uint64_t cor_id) {
   return FINISH;
 }
 
+RC WorkerThread::process_set_co_ts(yield_func_t &yield, Message * msg, uint64_t cor_id) {
+  txn_man->set_commit_timestamp(((FinishMessage*)msg)->commit_timestamp);
+  txn_man->retire(yield, cor_id);
+  return RCOK;
+}
 
 RC WorkerThread::process_rfin(yield_func_t &yield, Message * msg, uint64_t cor_id) {
   DEBUG_T("RFIN %ld from %ld\n",msg->get_txn_id(),msg->return_node_id);
   assert(CC_ALG != CALVIN);
   M_ASSERT_V(!IS_LOCAL(msg->get_txn_id()), "RFIN local: %ld %ld/%d\n", msg->get_txn_id(),
              msg->get_txn_id() % g_node_cnt, g_node_id);
-#if CC_ALG == MAAT
+#if CC_ALG == MAAT || ((CC_ALG == MV_WOUND_WAIT || CC_ALG == MV_NO_WAIT)&&CLV != CLV3 )
   txn_man->set_commit_timestamp(((FinishMessage*)msg)->commit_timestamp);
 #endif
   txn_man->abort_cnt = msg->current_abort_cnt;
   txn_man->set_rc(((FinishMessage*)msg)->rc);
+#if CLV == CLV2
+
+  if (txn_man->get_rc() == RCOK){
+    txn_man->retire(yield, cor_id);
+  }
+#endif
+  if (msg->rc == RCOK){
+    txn_man->txn_state = COMMITING;
+  }
 
 #if USE_REPLICA && !USE_TAPIR
   if(txn_man->get_local_log()){
@@ -507,7 +531,7 @@ RC WorkerThread::process_rfin(yield_func_t &yield, Message * msg, uint64_t cor_i
 //now commit 
   txn_man->commit(yield, cor_id);
   //if(!txn_man->query->readonly() || CC_ALG == OCC)
-  if (!((FinishMessage*)msg)->readonly || CC_ALG == MAAT || CC_ALG == OCC || USE_TAPIR || CC_ALG == NO_WAIT)
+  if (!((FinishMessage*)msg)->readonly || CC_ALG == MAAT || CC_ALG == OCC || USE_TAPIR || CC_ALG == NO_WAIT || CC_ALG == SSI)
 #if TAPIR_DEBUG
     printf("%d:%d send commit finish ack to %d\n", g_node_id, msg->get_txn_id(), GET_NODE_ID(msg->get_txn_id()));
 #endif
@@ -554,9 +578,21 @@ RC WorkerThread::process_rack_log(yield_func_t &yield, Message * msg, uint64_t c
 #endif
     INC_STATS(get_thd_id(), trans_prepare_log_message_time, prepare_message_timespan);
     INC_STATS(get_thd_id(), trans_prepare_log_message_count, 1);
+
+
+    //这个情况是远程的日志写完都返回prepare消息了，本地还没写完，的情况
 		if(txn_man->get_return_node() == g_node_id){
-      assert(IS_LOCAL(txn_man->get_txn_id()));
-      if(txn_man->get_rsp_cnt() > 0) return WAIT;
+      assert(IS_LOCAL(txn_man->get_txn_id()));    
+      if(txn_man->get_rsp_cnt() > 0) return WAIT;//如果远程prepare还没回应完，等待
+      rc = txn_man->get_rc();
+
+#if CC_ALG == MV_NO_WAIT || CC_ALG == MV_WOUND_WAIT
+      if (rc == RCOK && txn_man->inconflict > 0){
+          txn_man->txn_state = WAIT_PREP_COMT;
+          return WAIT;
+      }
+#endif
+          
       //finish
       uint64_t finish_start_time = get_sys_clock();
 			txn_man->txn_stats.finish_start_time = finish_start_time;
@@ -570,31 +606,104 @@ RC WorkerThread::process_rack_log(yield_func_t &yield, Message * msg, uint64_t c
 			
 			// INC_STATS(get_thd_id(), trans_prepare_time, prepare_timespan);
       // INC_STATS(get_thd_id(), trans_prepare_count, 1);
-#if EARLY_PREPARE
-      if(txn_man->get_rc()==Abort) return Abort;
-      // if(txn_man->aborted) return Abort;
-#else
-      assert(txn_man->get_rc()==RCOK);
-#endif
+      if(rc == Abort) {
+        txn_man->send_finish_messages();
+        txn_man->abort(yield, cor_id);
+      }else{
 #if CO_LOG
-      txn_man->send_colog_messages();
-      rc = WAIT_REM;
-      return rc;
+        txn_man->send_colog_messages();
+        rc = WAIT_REM;
+        return rc;
+#else 
+          txn_man->send_finish_messages();
+          txn_man->txn_state = COMMITING;
+
+#if USE_REPLICA
+          if(txn_man->get_local_log()){
+            txn_man->log_replica(RFIN_LOG, g_node_id); 
+            rc = WAIT_REM;
+            return rc;
+          }else{
+            txn_man->commit(yield, cor_id);
+          }
+#else
+          // if(txn_man->query->partitions_touched.size() != 0)
+            txn_man->commit(yield, cor_id);
 #endif
-      txn_man->send_finish_messages();
-      assert(txn_man->get_local_log());
-      txn_man->log_replica(RFIN_LOG, g_node_id); 
-      rc = WAIT_REM;
-      return rc;
+#endif
+        }
+      
     }else{
       DEBUG_T("%d:%d send rack prep to %d\n", g_node_id, txn_man->get_txn_id(), txn_man->get_return_node());
+#if CC_ALG == MV_WOUND_WAIT || CC_ALG == MV_NO_WAIT
+#if CLV == CLV2 || CLV == CLV3
+      //验证事务，写完prepare日志后验证
+      if (txn_man->inconflict > 0){
+        txn_man->txn_state = WAIT_PREP_COMT;
+        return WAIT;
+      }
+#endif
+#endif
+
 #if EARLY_PREPARE
 	    // printf("xxx txn %lu send rack_prep, rc = %d\n", txn_man->get_txn_id(), txn_man->get_rc());
       txn_man->finish_read_write = true;
-#endif
+#endif  
       msg_queue.enqueue(get_thd_id(), Message::create_message(txn_man,RACK_PREP),txn_man->get_return_node());
     }    
   }
+  return RCOK;
+}
+
+RC WorkerThread::process_rack_prep_cont(yield_func_t &yield, Message * msg, uint64_t cor_id) {
+  RC rc = RCOK;
+  //这里其实可以增加统计，日志写完后，等待了多长时间进行统计信息
+    //这个情况是远程的日志写完都返回prepare消息了，本地还没写完，的情况
+		if(txn_man->get_return_node() == g_node_id){
+      assert(IS_LOCAL(txn_man->get_txn_id()));    
+      if(txn_man->get_rsp_cnt() > 0) return WAIT;//如果远程prepare还没回应完，等待  
+      //finish
+      uint64_t finish_start_time = get_sys_clock();
+			txn_man->txn_stats.finish_start_time = finish_start_time;
+			uint64_t prepare_timespan  = finish_start_time - txn_man->txn_stats.prepare_start_time;
+      
+      INC_STATS(get_thd_id(), trans_logging_count, 1);
+      // assert(txn_man->start_logging_time!=0);
+      // printf("logging time %lu", get_sys_clock() - txn_man->start_logging_time);
+      INC_STATS(get_thd_id(), trans_logging_time, get_sys_clock() - txn_man->start_logging_time);
+      txn_man->start_fin_time = get_sys_clock();
+			
+			// INC_STATS(get_thd_id(), trans_prepare_time, prepare_timespan);
+      // INC_STATS(get_thd_id(), trans_prepare_count, 1);
+      if(txn_man->get_rc() == Abort) {
+        txn_man->send_finish_messages();
+        txn_man->abort(yield, cor_id);
+      }else{
+#if CO_LOG
+        txn_man->send_colog_messages();
+        rc = WAIT_REM;
+        return rc;
+#else 
+          txn_man->send_finish_messages();
+          txn_man->txn_state = COMMITING;
+
+#if USE_REPLICA
+          if(txn_man->get_local_log()){
+            txn_man->log_replica(RFIN_LOG, g_node_id); 
+            rc = WAIT_REM;
+            return rc;
+          }else{
+            txn_man->commit(yield, cor_id);
+          }
+#else
+          // if(txn_man->query->partitions_touched.size() != 0)
+            txn_man->commit(yield, cor_id);
+#endif
+#endif
+        } 
+    }else{
+      msg_queue.enqueue(get_thd_id(), Message::create_message(txn_man,RACK_PREP),txn_man->get_return_node());
+    }    
   return RCOK;
 }
 
@@ -655,6 +764,30 @@ RC WorkerThread::process_rack_fin_log(yield_func_t &yield, Message * msg, uint64
   return RCOK;
 }
 
+RC WorkerThread::process_rack_pre_prep(yield_func_t &yield, Message * msg, uint64_t cor_id) {
+  RC rc = RCOK;
+  int responses_left = 0;
+
+  if (!txn_man || !(txn_man->txn) || !txn_man->query || txn_man->query->partitions_touched.size() == 0 || txn_man->abort_cnt != msg->current_abort_cnt) {
+    DEBUG_T("RPREP_ACK skip %ld from %ld\n",msg->get_txn_id(),msg->get_return_id());
+    return RCOK;
+  }
+  responses_left = txn_man->received_pre_response(((AckMessage*)msg)->rc);
+  //计算最大提交时间戳，这里只有这种并发控制才有,本地的在txn中直接生成并计算了
+  txn_man->set_max_prepare_timestamp(((AckMessage*)msg)->prepare_timestamp);
+  assert(responses_left >= 0);
+  if (responses_left > 0) return WAIT;
+
+  if(txn_man->get_rc() != Abort) {
+    //设置提交时间戳，发送消息
+    txn_man->set_commit_timestamp(txn_man->max_prepare_timestamp);
+    txn_man->send_co_ts_messages();
+    txn_man->retire(yield, cor_id);
+  } 
+  return rc;
+}
+
+
 RC WorkerThread::process_rack_prep(yield_func_t &yield, Message * msg, uint64_t cor_id) {
   DEBUG_T("RPREP_ACK %ld from %ld\n",msg->get_txn_id(),msg->get_return_id());
   RC rc = RCOK;
@@ -680,12 +813,15 @@ RC WorkerThread::process_rack_prep(yield_func_t &yield, Message * msg, uint64_t 
   // if (responses_left == 0) printf("recive prepare %d message\n", txn_man->prepare_count);
 #else
   responses_left = txn_man->received_response(((AckMessage*)msg)->rc);
+  //计算最大提交时间戳，这里只有这种并发控制才有,本地的在txn中直接生成并计算了
+#if CC_ALG == MV_NO_WAIT || CC_ALG == MV_WOUND_WAIT
+	txn_man->set_max_prepare_timestamp(((AckMessage*)msg)->prepare_timestamp);
+#endif
+uint64_t prepare_message_timespan = get_sys_clock() - txn_man->txn_stats.prepare_start_time;
+INC_STATS(get_thd_id(), trans_prepare_message_time, prepare_message_timespan);
+INC_STATS(get_thd_id(), trans_prepare_message_count, 1);
 
-  uint64_t prepare_message_timespan = get_sys_clock() - txn_man->txn_stats.prepare_start_time;
-  INC_STATS(get_thd_id(), trans_prepare_message_time, prepare_message_timespan);
-  INC_STATS(get_thd_id(), trans_prepare_message_count, 1);
-
-  assert(responses_left >= 0);
+assert(responses_left >= 0);
 #endif
 #if CC_ALG == MAAT
   // Integrate bounds
@@ -764,8 +900,13 @@ RC WorkerThread::process_rack_prep(yield_func_t &yield, Message * msg, uint64_t 
 #endif
   // Done waiting
   if(txn_man->get_rc() == RCOK) {
-    rc = txn_man->validate(yield, cor_id);
+    rc = txn_man->validate(yield, cor_id);//mv2pl没有这一步
   }
+  if (txn_man->get_rc() == RCOK && txn_man->inconflict > 0){
+    txn_man->txn_state = WAIT_PREP_COMT;
+    return rc;
+  }
+
   if(IS_LOCAL(txn_man->get_txn_id())) {
 		INC_STATS(get_thd_id(), trans_logging_count, 1);
     // assert(txn_man->start_logging_time!=0);
@@ -778,15 +919,16 @@ RC WorkerThread::process_rack_prep(yield_func_t &yield, Message * msg, uint64_t 
   uint64_t prepare_timespan  = finish_start_time - txn_man->txn_stats.prepare_start_time;
   // INC_STATS(get_thd_id(), trans_prepare_time, prepare_timespan);
   // INC_STATS(get_thd_id(), trans_prepare_count, 1);
+
   if(rc == Abort || txn_man->get_rc() == Abort) {
     txn_man->txn->rc = Abort;
     rc = Abort;
   }
 #if USE_TAPIR
   // printf("prepare %d\n", txn_man->txn_state);
-  if(txn_man->txn_state == 1) {
+  if(txn_man->txn_state == PREPARE) {
     txn_man->send_finish_messages();
-    txn_man->txn_state = 2;
+    txn_man->txn_state = COMMITING;
   } else {
     return rc;
   }
@@ -798,7 +940,7 @@ RC WorkerThread::process_rack_prep(yield_func_t &yield, Message * msg, uint64_t 
   }
   return rc;
 #endif
-
+//这里才对，这里和本地处理那里应该一样吧 
   if(rc == Abort) {
 #if !EARLY_PREPARE
     txn_man->send_finish_messages();
@@ -815,12 +957,16 @@ RC WorkerThread::process_rack_prep(yield_func_t &yield, Message * msg, uint64_t 
     // }
 #endif
   } else {
-#if CO_LOG
+#if CO_LOG//明天从返回co_log继续写，发送finishi消息后，本地退休
     txn_man->send_colog_messages();
     rc = WAIT_REM;
     return rc;
+#endif   
+#if CLV == CLV3
+	  txn_man->set_commit_timestamp(txn_man->max_prepare_timestamp);
 #endif
     txn_man->send_finish_messages();
+    txn_man->txn_state = COMMITING;
 #if USE_REPLICA
     if(txn_man->get_local_log()){
       txn_man->log_replica(RFIN_LOG, g_node_id); 
@@ -850,8 +996,17 @@ RC WorkerThread::process_rack_co_log(yield_func_t &yield, Message * msg, uint64_
   
   if (responses_left > 0) return WAIT;
   // Done waiting
-    txn_man->send_finish_messages();
+#if CLV == CLV1 || CLV == CLV2
+  txn_man->set_commit_timestamp(txn_man->max_prepare_timestamp);
+#endif
+  txn_man->send_finish_messages();
+  txn_man->txn_state = COMMITING;
+#if CLV == CLV2
+  //调用退休函数，此时事务回滚的情况只有日志写失败，但是不可能,这里不需要判断事务是否回滚，能走到这一步，一定能提交，那些直接finish回滚的是没有prepare阶段，所以finishi哪里需要判断是否回滚，然后确定是否退休，这里不需要
+  txn_man->retire(yield,cor_id);
+#endif
 #if USE_REPLICA
+//写完本地日志在写finish日志，不然直接提交？？
     if(txn_man->get_local_log()){
       txn_man->log_replica(RFIN_LOG, g_node_id); 
       rc = WAIT_REM;
@@ -898,14 +1053,14 @@ RC WorkerThread::process_rack_rfin(Message * msg) {
 #endif
 #endif
   // Done waiting
-  txn_man->txn_state = 3;
+  txn_man->txn_state = COMMIT;
   INC_STATS(get_thd_id(), trans_fin_count, 1);
 	INC_STATS(get_thd_id(), trans_fin_time, get_sys_clock() - txn_man->start_fin_time);
 	// start_fin_time = get_sys_clock();
   txn_man->txn_stats.twopc_time += get_sys_clock() - txn_man->txn_stats.wait_starttime;
 #if USE_TAPIR
   // printf("responses_left %d %d\n", responses_left, txn_man->txn_state);
-  if(txn_man->txn_state != 3) return rc;
+  if(txn_man->txn_state != COMMITING) return rc;
   // if (responses_left == 0) printf("%d recive commit %d message\n",txn_man->get_txn_id(), txn_man->commit_count);
   if(txn_man->get_rc() == RCOK) {
 #if TAPIR_DEBUG
@@ -957,9 +1112,7 @@ RC WorkerThread::process_rqry_rsp(yield_func_t &yield, Message * msg, uint64_t c
 
   RC rc = txn_man->get_rc();
   if(rc == RCOK){
-#if CC_ALG == WOUND_WAIT
-        txn_state = STARTCOMMIT;
-#endif
+
     rc = txn_man->start_commit(yield, cor_id);
   }
 #else
@@ -989,9 +1142,14 @@ RC WorkerThread::process_rqry(yield_func_t &yield, Message * msg, uint64_t cor_i
 
   msg->copy_to_txn(txn_man);
 
-#if CC_ALG == MVCC
+#if CC_ALG == MVCC 
   txn_table.update_min_ts(get_thd_id(),txn_man->get_txn_id(),0,txn_man->get_timestamp());
 #endif
+
+#if CC_ALG == SSI || CC_ALG == MV_NO_WAIT || CC_ALG == MV_WOUND_WAIT
+    txn_table.update_min_ts(get_thd_id(),txn_man->get_txn_id(),0,txn_man->get_start_timestamp());
+#endif
+
 #if CC_ALG == MAAT
     time_table.init(get_thd_id(),txn_man->get_txn_id());
 #endif
@@ -1014,11 +1172,11 @@ RC WorkerThread::process_rqry(yield_func_t &yield, Message * msg, uint64_t cor_i
 RC WorkerThread::process_rqry_cont(yield_func_t &yield, Message * msg, uint64_t cor_id) {
   DEBUG_T("RQRY_CONT %ld from %ld\n",msg->get_txn_id(),msg->return_node_id);
   assert(!IS_LOCAL(msg->get_txn_id()));
-  RC rc = RCOK;
-
-  txn_man->run_txn_post_wait();
-  rc = txn_man->run_txn(yield, cor_id);
-
+  RC rc = txn_man->get_rc();
+  if(rc != Abort){
+    txn_man->run_txn_post_wait();
+    rc = txn_man->run_txn(yield, cor_id);
+  }
   // Send response
   if(rc != WAIT) {
     msg_queue.enqueue(get_thd_id(),Message::create_message(txn_man,RQRY_RSP),txn_man->return_id);
@@ -1032,8 +1190,9 @@ RC WorkerThread::process_rtxn_cont(yield_func_t &yield, Message * msg, uint64_t 
   assert(IS_LOCAL(msg->get_txn_id()));
 
   txn_man->txn_stats.local_wait_time += get_sys_clock() - txn_man->txn_stats.wait_starttime;
-
-  txn_man->run_txn_post_wait();
+  if(txn_man->get_rc() != Abort){
+    txn_man->run_txn_post_wait();
+  }
   RC rc = txn_man->run_txn(yield, cor_id);
   check_if_done(rc);
   return RCOK;
@@ -1055,6 +1214,16 @@ RC WorkerThread::process_rprepare(yield_func_t &yield, Message * msg, uint64_t c
     msg_queue.enqueue(get_thd_id(),Message::create_message(txn_man,RACK_PREP),msg->return_node_id);
     return rc;
 #else
+//生成本地提交时间戳
+#if CC_ALG == MV_WOUND_WAIT || CC_ALG == MV_NO_WAIT
+      txn_man->set_prepare_timestamp(get_next_ts());
+      txn_man->txn_state = PREPARE;
+//clv3验证一下
+#if CLV == CLV3
+	msg_queue.enqueue(get_thd_id(), Message::create_message(txn_man,RACK_PRE_PREP),txn_man->get_return_node());
+#endif
+      
+#endif
     txn_man->log_replica(RLOG, msg->return_node_id);
     rc = WAIT_REM;
     return rc;
@@ -1110,7 +1279,7 @@ RC WorkerThread::process_rtxn( yield_func_t &yield, Message * msg, uint64_t cor_
     #endif
     // Put txn in txn_table
     txn_man = txn_table.get_transaction_manager(get_thd_id(),txn_id,0);
-    txn_man->register_thread(this);
+    txn_man->register_thread(this);//生成事务的线程吗？？
     uint64_t ready_starttime = get_sys_clock();
     bool ready = txn_man->unset_ready();
     INC_STATS(get_thd_id(),worker_activate_txn_time,get_sys_clock() - ready_starttime);
@@ -1163,10 +1332,10 @@ RC WorkerThread::process_rtxn( yield_func_t &yield, Message * msg, uint64_t cor_
   #endif
   }
 
-#if CC_ALG == MVCC
+#if CC_ALG == MVCC 
     txn_table.update_min_ts(get_thd_id(),txn_id,0,txn_man->get_timestamp());
 #endif
-#if CC_ALG == OCC
+#if CC_ALG == OCC || CC_ALG == SSI || CC_ALG == MV_WOUND_WAIT || CC_ALG == MV_NO_WAIT || CC_ALG == MV_DL_DETECT
   #if WORKLOAD==DA
     if(da_start_stamp_tab.count(txn_man->get_txn_id())==0)
     {
@@ -1177,6 +1346,7 @@ RC WorkerThread::process_rtxn( yield_func_t &yield, Message * msg, uint64_t cor_
       txn_man->set_start_timestamp(da_start_stamp_tab[txn_man->get_txn_id()]);
   #else
       txn_man->set_start_timestamp(get_next_ts());
+      txn_table.update_min_ts(get_thd_id(),txn_man->get_txn_id(),0,txn_man->get_start_timestamp());
   #endif
 #endif
 #if CC_ALG == MAAT

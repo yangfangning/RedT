@@ -178,7 +178,7 @@ MVReqEntry * Row_mvcc::debuffer_req( TsType type, TxnManager * txn) {
 
 	return return_queue;
 }
-
+//插入新版本
 void Row_mvcc::insert_history(ts_t ts, row_t *row) {
 	MVHisEntry * new_entry = get_his_entry();
 	new_entry->ts = ts;

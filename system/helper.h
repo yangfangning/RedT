@@ -116,6 +116,7 @@ void REDLOG(const char *format, ...);
 /************************************************/
 // LIST helper (read from head & write to tail)
 /************************************************/
+//取列表头部
 #define LIST_GET_HEAD(lhead, ltail, en) \
   {                                     \
 	en = lhead; \
@@ -126,6 +127,7 @@ void REDLOG(const char *format, ...);
       ltail = NULL;                     \
     if (en) en->next = NULL;            \
   }
+//放置到队尾
 #define LIST_PUT_TAIL(lhead, ltail, en) \
   {                                     \
 	en->next = NULL; \
@@ -139,6 +141,7 @@ void REDLOG(const char *format, ...);
       ltail = en;                       \
     }                                   \
   }
+///在entry前插入新元组
 #define LIST_INSERT_BEFORE(entry, newentry, lhead) \
   {                                                \
 	newentry->next = entry; \

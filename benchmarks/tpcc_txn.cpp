@@ -75,7 +75,7 @@ RC TPCCTxnManager::run_txn(yield_func_t &yield, uint64_t cor_id) {
 #if MODE == SETUP_MODE
 	return RCOK;
 #endif
-	RC rc = RCOK;
+	RC txn->rc = RCOK;
 	uint64_t starttime = get_sys_clock();
 
 #if CC_ALG == CALVIN
@@ -83,7 +83,7 @@ RC TPCCTxnManager::run_txn(yield_func_t &yield, uint64_t cor_id) {
 	return rc;
 #endif
 
-	if(IS_LOCAL(txn->txn_id) && (state == TPCC_PAYMENT0 || state == TPCC_NEWORDER0)) {
+	if(IS_LOCAL(txn->txn_id) && (state == TPCC_PAYMENT0 || state == TPCC_NEWORDER0) && txn->rc != Abort) {
 		DEBUG("Running txn %ld\n",txn->txn_id);
 #if DISTR_DEBUG
 		query->print();
@@ -97,14 +97,21 @@ RC TPCCTxnManager::run_txn(yield_func_t &yield, uint64_t cor_id) {
 
 	while(rc == RCOK && !is_done()) {
 		rc = run_txn_state(yield, cor_id);
+#if CC_ALG == WOUND_WAIT || CC_ALG == MV_WOUND_WAIT
+		if (txn_state == WOUNDED) {
+			rc = Abort;
+			break;
+		}  
+#endif		
 	}
+	if(rc == Abort) total_num_atomic_retry++;
 	uint64_t curr_time = get_sys_clock();
 	txn_stats.process_time += curr_time - starttime;
 	txn_stats.process_time_short += curr_time - starttime;
 
 	if (rc != Abort) {
-		if(rsp_cnt > 0) {
-			return WAIT;
+        if (rsp_cnt > 0) {
+            return WAIT;
 		} else {
 			if(IS_LOCAL(get_txn_id())) {
 				INC_STATS(get_thd_id(), trans_read_write_count, 1);
@@ -612,9 +619,9 @@ inline RC TPCCTxnManager::run_payment_0(yield_func_t &yield,uint64_t w_id, uint6
 
 	RC rc;
 	key = w_id;
-	INDEX * index = _wl->i_warehouse;
+	INDEX * index = _wl->i_warehouse;//仓库表的索引
 	INC_STATS(get_thd_id(),trans_benchmark_compute_time,get_sys_clock() - starttime);
-	item = index_read(index, key, wh_to_part(w_id));
+	item = index_read(index, key, wh_to_part(w_id));//通过index找到哪个表，key表示主键，在找到分区id，从而找到这个item
 	starttime = get_sys_clock();
 	assert(item != NULL);
 	row_t * r_wh = ((row_t *)item->location);

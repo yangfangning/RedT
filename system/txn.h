@@ -44,13 +44,13 @@ enum BatchReadType {R_INDEX=0,R_ROW};
 
 class Access {
 public:
-	access_t 	type;
-	row_t * 	orig_row;
-	row_t * 	data;
+	access_t 	type;//终止的话也没有这个，甚至不会加入这个事务的accesses。
+	row_t * 	orig_row;//执向这个行但是不是版本，但是等待或者终止的话，orig_row还是为空
+	row_t * 	data;//这个会指向访问的行，代表
 	row_t * 	orig_data;
 	uint64_t    version;
 	void cleanup();
-};
+};//只有会成为拥有者的事务才会将自身加入accesses，其他的不会加入
 
 class Transaction {
 public:
@@ -64,6 +64,7 @@ public:
 	uint64_t timestamp;
 	// For OCC and SSI
 	uint64_t start_timestamp;
+	uint64_t prepare_timestamp;
 	uint64_t end_timestamp;
 
 	uint64_t write_cnt;
@@ -98,8 +99,8 @@ public:
 	double process_time;
 	double total_local_wait_time;
 	double local_wait_time;
-	double total_remote_wait_time;  // time waiting for a remote response, to help calculate network
-																	// time
+	double total_remote_wait_time;  // time waiting for a remote response, to help calculate network time
+	
 	double remote_wait_time;
 	double total_twopc_time;
 	double twopc_time;
@@ -125,6 +126,10 @@ public:
 
 	double lat_network_time_start;
 	double lat_other_time_start;
+};
+struct ONCONFLICT {
+  TxnManager *txn;
+  ONCONFLICT *next;
 };
 
 /*
@@ -211,14 +216,20 @@ public:
 	// [HSTORE, HSTORE_SPEC]
 	int volatile    ready_part;
 	int volatile    ready_ulk;
+	//为了添加依赖
+	ONCONFLICT* creat_on_entry();
+    int inconflict;
+    ONCONFLICT * onconflict;
 
-	uint64_t num_msgs_rw;
+
+    uint64_t num_msgs_rw;
 	uint64_t num_msgs_prep;
 	uint64_t num_msgs_commit;	
 
-#if CC_ALG == WOUND_WAIT
+//#if CC_ALG == WOUND_WAIT
 	TxnStatus		txn_state;
-#endif
+
+	void retire(yield_func_t &yield, uint64_t cor_id);
 	bool aborted;
 	uint64_t return_id;
 	RC        validate(yield_func_t &yield, uint64_t cor_id);
@@ -243,6 +254,11 @@ public:
 
 	uint64_t get_batch_id() {return txn->batch_id;}
 	void set_batch_id(uint64_t batch_id) {txn->batch_id = batch_id;}
+	//for mv2pl
+	void set_prepare_timestamp(uint64_t prepare_timestamp){txn->prepare_timestamp = prepare_timestamp;}
+    uint64_t max_prepare_timestamp;
+	ts_t get_prepare_timestamp();
+	void set_max_prepare_timestamp(uint64_t prepare_timestamp);
 
 		// For MaaT
 	uint64_t commit_timestamp;
@@ -254,8 +270,6 @@ public:
 	std::set<uint64_t> * uncommitted_reads;
 	std::set<uint64_t> * uncommitted_writes;
 	std::set<uint64_t> * uncommitted_writes_y;
-
-	uint64_t txn_state = 0;// 0 execution, 1, prepare, 2 commit
 	uint64_t twopl_wait_start;
 
 	// For Tictoc
@@ -288,7 +302,8 @@ public:
 	uint64_t get_abort_cnt() {return abort_cnt;}
 	uint64_t abort_cnt;
 	int received_response(RC rc);
-	int received_fin_response(RC rc);
+	int received_pre_response(RC rc);
+    int received_fin_response(RC rc);
 	int received_log_response(RC rc);
 	int received_log_fin_response(RC rc);
 	int received_tapir_response(RC rc, uint64_t return_node_id);
@@ -298,7 +313,8 @@ public:
 	void set_rc(RC rc) {txn->rc = rc;}
 	//void send_rfin_messages(RC rc) {assert(false);}
 	void send_finish_messages();
-	void send_colog_messages();
+    void send_co_ts_messages();
+    void send_colog_messages();
 	void send_prepare_messages();
 
 	TxnStats txn_stats;
@@ -333,6 +349,8 @@ protected:
 	int log_rsp_cnt;
 	int log_fin_rsp_cnt;
 	bool local_log;
+	int  pre_prepare_cnt;
+    
 #if USE_TAPIR
 	int ir_log_rsp_cnt[NODE_CNT];
 #endif

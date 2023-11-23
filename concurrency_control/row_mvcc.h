@@ -21,13 +21,15 @@ class table_t;
 class Catalog;
 class TxnManager;
 
+
+//代表完整的一行
 struct MVReqEntry {
 	TxnManager * txn;
 	ts_t ts;
 	ts_t starttime;
 	MVReqEntry * next;
 };
-
+//代表一行中的不同历史版本，这里的行是真实的一行，每行中有数据，不同行代表不同的不同的版本
 struct MVHisEntry {
 	ts_t ts;
 	// only for write history. The value needs to be stored.

@@ -86,6 +86,7 @@ class WkdbTimeTable;
 class DAQuery;
 class DABlockQueue;
 class Workload;
+class ssi;
 // class QTcpQueue;
 // class TcpTimestamp;
 
@@ -126,6 +127,7 @@ extern Logger logger;
 extern TimeTable time_table;
 extern InOutTable inout_table;
 extern WkdbTimeTable wkdb_time_table;
+extern ssi ssi_man;
 // extern QTcpQueue tcp_queue;
 // extern TcpTimestamp tcp_ts;
 
@@ -338,6 +340,9 @@ enum RemReqType {
     CALVIN_ACK,
     RCO_LOG,
     RACK_CO_LOG,
+    RACK_PREP_CONT,
+    RACK_PRE_PREP,
+    SET_CO_TS,
   NO_MSG
 };
 
@@ -351,11 +356,13 @@ enum CALVIN_PHASE {
   CALVIN_DONE
 };
 
-//WOUND_WAIT
 enum TxnStatus {
   RUNNING = 0,
   WOUNDED,
-  STARTCOMMIT
+  PREPARE,
+  WAIT_PREP_COMT,//等待提交，当处于这个状态说明有前驱事务还没提交
+  COMMITING,//于下同理，当commi时，收到prepare回应也不回进行处理了
+  COMMIT//用于消息判断，当事务状态进入end时，返回finish消息也不回处理了
 };
 
 /* Thread */
@@ -380,7 +387,7 @@ typedef uint64_t (*func_ptr)(idx_key_t);	// part_id func_ptr(index_key);
 /* general concurrency control */
 enum access_t {RD, WR, XP, SCAN};
 /* LOCK */
-enum lock_t {DLOCK_EX = 0, DLOCK_SH, LOCK_NONE };
+enum lock_t {DLOCK_EX = 0, DLOCK_SH, LOCK_NONE , LOCK_COM , XP , W};
 /* TIMESTAMP */
 enum TsType {R_REQ = 0, W_REQ, P_REQ, XP_REQ};
 /* CICADA */

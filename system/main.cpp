@@ -40,6 +40,7 @@
 #include "ycsb_query.h"
 #include "da.h"
 #include "maat.h"
+#include "ssi.h"
 #include "client_query.h"
 #include "lib.hh"
 #include "qps/rc_recv_manager.hh"
@@ -196,6 +197,16 @@ int main(int argc, char *argv[]) {
 	client_query_queue.init(m_wl);
 	printf("Done\n");
 	fflush(stdout);
+#endif
+#if CC_ALG == SSI
+    printf("Initializing In Out Table... ");
+    fflush(stdout);
+    inout_table.init();
+    printf("Done\n");
+    printf("Initializing SSI manager... ");
+    fflush(stdout);
+    ssi_man.init();
+    printf("Done\n");
 #endif
 #if CC_ALG == CALVIN
 	printf("Initializing sequencer... ");

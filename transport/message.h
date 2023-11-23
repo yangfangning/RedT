@@ -111,7 +111,7 @@ public:
   bool readonly;
 #if CC_ALG == MAAT || CC_ALG == WOOKONG || CC_ALG == SSI || CC_ALG == WSI || \
     CC_ALG == DTA || CC_ALG == DLI_DTA || CC_ALG == DLI_DTA2 || CC_ALG == DLI_DTA3 || CC_ALG == DLI_MVCC_OCC || \
-    CC_ALG == DLI_MVCC || CC_ALG == SILO
+    CC_ALG == DLI_MVCC || CC_ALG == SILO || CC_ALG == MV_WOUND_WAIT || CC_ALG == MV_NO_WAIT
   uint64_t commit_timestamp;
 #endif
 };
@@ -189,6 +189,11 @@ public:
 #endif
 #if CC_ALG == SILO
   uint64_t max_tid;
+#endif
+#if CC_ALG == MV_WOUND_WAIT || CC_ALG == MV_NO_WAIT
+#if CLV == CLV1 || CLV == CLV2 || CLV == CLV3
+  uint64_t prepare_timestamp;
+#endif
 #endif
 
   // For Calvin PPS: part keys from secondary lookup for sequencer response
@@ -390,7 +395,7 @@ public:
 #if CC_ALG == MVCC
   uint64_t thd_id;
 #endif
-#if CC_ALG == OCC
+#if CC_ALG == OCC || CC_ALG == SSI
   uint64_t start_ts;
 #endif
 #if MODE==QRY_ONLY_MODE

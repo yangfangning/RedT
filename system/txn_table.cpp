@@ -105,7 +105,7 @@ TxnManager * TxnTable::get_transaction_manager(uint64_t thd_id, uint64_t txn_id,
 
     INC_STATS(thd_id,mtx[21],get_sys_clock()-prof_starttime);
     prof_starttime = get_sys_clock();
-
+  //初始化事务管理器
     txn_man_pool.get(thd_id,txn_man);
 
     INC_STATS(thd_id,mtx[22],get_sys_clock()-prof_starttime);
@@ -129,11 +129,12 @@ TxnManager * TxnTable::get_transaction_manager(uint64_t thd_id, uint64_t txn_id,
     INC_STATS(thd_id,txn_table_new_cnt,1);
   INC_STATS(thd_id,mtx[24],get_sys_clock()-prof_starttime);
   }
-
+//更新线程池的最小时间戳？
 #if CC_ALG == MVCC || CC_ALG == WOOKONG || CC_ALG == DTA || CC_ALG == DLI_DTA || CC_ALG == DLI_DTA2 || CC_ALG == DLI_DTA3
   if(txn_man->get_timestamp() < pool[pool_id]->min_ts)
     pool[pool_id]->min_ts = txn_man->get_timestamp();
 #endif
+
 
 
   // unset modify bit for this pool: txn_id % pool_size
@@ -162,6 +163,26 @@ void TxnTable::restart_txn(uint64_t thd_id, uint64_t txn_id,uint64_t batch_id){
       else
         work_queue.enqueue(thd_id,Message::create_message(t_node->txn_man,RQRY_CONT),false);
 #endif
+      break;
+    }
+    t_node = t_node->next;
+  }
+
+  // unset modify bit for this pool: txn_id % pool_size
+  ATOM_CAS(pool[pool_id]->modify,true,false);
+
+}
+void TxnTable::restart_prep(uint64_t thd_id, uint64_t txn_id,uint64_t batch_id){
+  uint64_t pool_id = txn_id % pool_size;
+  // set modify bit for this pool: txn_id % pool_size
+  while (!ATOM_CAS(pool[pool_id]->modify, false, true)) {
+  };
+
+  txn_node_t t_node = pool[pool_id]->head;
+
+  while (t_node != NULL) {
+    if(is_matching_txn_node(t_node,txn_id,batch_id)) {
+      work_queue.enqueue(thd_id,Message::create_message(t_node->txn_man,RACK_PREP_CONT),false);
       break;
     }
     t_node = t_node->next;

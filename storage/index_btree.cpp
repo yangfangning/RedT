@@ -89,7 +89,7 @@ RC index_btree::index_read(idx_key_t key, itemid_t *& item) {
 	assert(false);
 	return RCOK;
 }
-
+//这里是索引读的上层
 RC index_btree::index_read(idx_key_t key, itemid_t *&item, int part_id) {
 
 	return index_read(key, item, 0, part_id);

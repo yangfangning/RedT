@@ -32,6 +32,8 @@
 #include "mem_alloc.h"
 #include "manager.h"
 #include "wl.h"
+#include "row_ssi.h"
+#include "row_mv2pl.h"
 
 #define SIM_FULL_ROW true
 
@@ -83,6 +85,10 @@ void row_t::init_manager(row_t * row) {
 	manager = (Row_maat *) mem_allocator.align_alloc(sizeof(Row_maat));
 #elif CC_ALG == CNULL
 	manager = (Row_null *) mem_allocator.align_alloc(sizeof(Row_null));
+#elif CC_ALG == SSI
+    manager = (Row_ssi *) mem_allocator.align_alloc(sizeof(Row_ssi));
+#elif CC_ALG == MV_WOUND_WAIT || CC_ALG == MV_NO_WAIT || CC_ALG == MV_DL_DETECT
+    manager = (Row_mv2pl *) mem_allocator.align_alloc(sizeof(Row_mv2pl));
 #endif
 
 #if CC_ALG != HSTORE && CC_ALG != HSTORE_SPEC
@@ -189,7 +195,7 @@ void row_t::copy(row_t * src) {
 	set_data(d);
 #endif
 }
-
+//将这一行中的data清空
 void row_t::free_row() {
 	DEBUG_M("row_t::free_row free\n");
 
@@ -226,7 +232,7 @@ RC row_t::remote_copy_row(row_t* remote_row, TxnManager * txn, Access *access) {
   INC_STATS(txn->get_thd_id(), trans_cur_row_copy_time, get_sys_clock() - copy_time);
   return rc;
 }
-
+//读写操作从这进入
 RC row_t::get_row(yield_func_t &yield,access_t type, TxnManager *txn, Access *access,uint64_t cor_id) {
   RC rc = RCOK;
 #if MODE==NOCC_MODE || MODE==QRY_ONLY_MODE
@@ -286,7 +292,7 @@ RC row_t::get_row(yield_func_t &yield,access_t type, TxnManager *txn, Access *ac
 	}
   	INC_STATS(txn->get_thd_id(), trans_cur_row_copy_time, get_sys_clock() - copy_time);
 	goto end;
-#elif CC_ALG == TIMESTAMP || CC_ALG == MVCC
+#elif CC_ALG == TIMESTAMP || CC_ALG == MVCC || CC_ALG == SSI || CC_ALG == MV_NO_WAIT || CC_ALG == MV_WOUND_WAIT
 	//uint64_t thd_id = txn->get_thd_id();
 // For TIMESTAMP RD, a new copy of the access->data will be returned.
 
@@ -299,7 +305,23 @@ RC row_t::get_row(yield_func_t &yield,access_t type, TxnManager *txn, Access *ac
 	txn->cur_row = (row_t *) mem_allocator.alloc(row_t::get_row_size(tuple_size));
 	txn->cur_row->init(get_table(), this->get_part_id());
 	assert(txn->cur_row->get_schema() == this->get_schema());
-#endif
+	INC_STATS(txn->get_thd_id(), trans_cur_row_copy_time, get_sys_clock() - copy_time);
+#elif CC_ALG == MV_NO_WAIT || CC_ALG == MV_WOUND_WAIT
+	lock_t lt = (type == RD || type == SCAN) ? DLOCK_SH : DLOCK_EX; 
+    INC_STATS(txn->get_thd_id(), trans_cur_row_init_time, get_sys_clock() - init_time);
+	rc = this->manager->access(txn, lt, NULL);
+  	uint64_t copy_time = get_sys_clock();
+	if (rc == RCOK) {
+		access->data = txn->cur_row;
+	} else if (rc == Abort) {
+		// total_num_atomic_retry++;
+	} else if (rc == WAIT) {
+		rc = WAIT;
+		INC_STATS(txn->get_thd_id(), trans_cur_row_copy_time, get_sys_clock() - copy_time);
+		goto end;
+	}
+  	INC_STATS(txn->get_thd_id(), trans_cur_row_copy_time, get_sys_clock() - copy_time);
+#else
 	INC_STATS(txn->get_thd_id(), trans_cur_row_init_time, get_sys_clock() - init_time);
 	uint64_t copy_time = get_sys_clock();
 	// row_t * row;
@@ -328,14 +350,16 @@ RC row_t::get_row(yield_func_t &yield,access_t type, TxnManager *txn, Access *ac
 			assert(access->data->get_table_name() != NULL);
 		}
 	}
-	if (rc != Abort && (CC_ALG == MVCC) && type == WR) {
-			DEBUG_M("row_t::get_row MVCC alloc \n");
+	INC_STATS(txn->get_thd_id(), trans_cur_row_copy_time, get_sys_clock() - copy_time);
+#endif
+	//找到了！！！多版本，对于写操作，会创建一个新的行
+	if (rc != Abort && (CC_ALG == MVCC || CC_ALG == SSI || CC_ALG == MV_NO_WAIT || CC_ALG == MV_WOUND_WAIT) && type == WR) {
+		DEBUG_M("row_t::get_row MVCC alloc \n");
 		row_t * newr = (row_t *) mem_allocator.alloc(row_t::get_row_size(tuple_size));
 		newr->init(this->get_table(), get_part_id());
 		newr->copy(access->data);
 		access->data = newr;
 	}
-  INC_STATS(txn->get_thd_id(), trans_cur_row_copy_time, get_sys_clock() - copy_time);
 	goto end;
 #elif CC_ALG == OCC
 	// OCC always make a local copy regardless of read or write
@@ -391,15 +415,27 @@ RC row_t::get_row(access_t type, TxnManager * txn, row_t *& row, uint64_t &orig_
 RC row_t::get_row_post_wait(access_t type, TxnManager * txn, row_t *& row) {
 	RC rc = RCOK;
   uint64_t init_time = get_sys_clock();
-	assert(CC_ALG == WAIT_DIE || CC_ALG == MVCC || CC_ALG == TIMESTAMP ||
-				 CC_ALG == TIMESTAMP || CC_ALG == WOUND_WAIT);
+	assert(CC_ALG == WAIT_DIE || CC_ALG == MVCC || CC_ALG == TIMESTAMP || CC_ALG == TIMESTAMP || CC_ALG == WOUND_WAIT || CC_ALG == SSI || CC_ALG == MV_WAIT_DIE || CC_ALG == MV_WOUND_WAIT);
 #if CC_ALG == WAIT_DIE || CC_ALG == WOUND_WAIT
 	assert(txn->lock_ready);
 	rc = RCOK;
 	//ts_t endtime = get_sys_clock();
 	row = this;
+#elif CC_ALG == MV_WOUND_WAIT || CC_ALG == MV_WAIT_DIE
+	assert(txn->lock_ready);
+	row = txn->cur_row;
+	if (type == WR) {
+		row_t * newr = (row_t *) mem_allocator.alloc(row_t::get_row_size(tuple_size));
+		newr->init(this->get_table(), get_part_id());
+		INC_STATS(txn->get_thd_id(), trans_cur_row_init_time, get_sys_clock() - init_time);
+		uint64_t copy_time = get_sys_clock();
+			newr->copy(row);
+			row = newr;
+		INC_STATS(txn->get_thd_id(), trans_cur_row_copy_time, get_sys_clock() - copy_time);
+	}
+#endif
 
-#elif CC_ALG == MVCC || CC_ALG == TIMESTAMP
+#if CC_ALG == MVCC || CC_ALG == TIMESTAMP
 	assert(txn->ts_ready);
 	//INC_STATS(thd_id, time_wait, t2 - t1);
 	row = txn->cur_row;
@@ -408,7 +444,7 @@ RC row_t::get_row_post_wait(access_t type, TxnManager * txn, row_t *& row) {
 	assert(row->get_table() != NULL);
 	assert(row->get_schema() == this->get_schema());
 	assert(row->get_table_name() != NULL);
-	if (( CC_ALG == MVCC) && type == WR) {
+	if (( CC_ALG == MVCC || CC_ALG == SSI) && type == WR) {
 		DEBUG_M("row_t::get_row_post_wait MVCC alloc \n");
 		row_t * newr = (row_t *) mem_allocator.alloc(row_t::get_row_size(tuple_size));
 		newr->init(this->get_table(), get_part_id());
@@ -446,7 +482,7 @@ uint64_t row_t::return_row(RC rc, access_t type, TxnManager *txn, row_t *row) {
 	}
 	this->manager->lock_release(txn);
 	return 0;
-#elif CC_ALG == TIMESTAMP || CC_ALG == MVCC
+#elif CC_ALG == TIMESTAMP || CC_ALG == MVCC || CC_ALG == SSI
 	// for RD or SCAN or XP, the row should be deleted.
 	// because all WR should be companied by a RD
 	// for MVCC RD, the row is not copied, so no need to free.
@@ -464,6 +500,27 @@ uint64_t row_t::return_row(RC rc, access_t type, TxnManager *txn, row_t *row) {
 		assert (type == WR && row != NULL);
 		assert (row->get_schema() == this->get_schema());
 		RC rc = this->manager->access(txn, W_REQ, row);
+		assert(rc == RCOK);
+	}
+	return 0;
+#elif CC_ALG == MV_WOUND_WAIT || CC_ALG == MV_NO_WAIT
+
+	if (type == RD || type == SCAN) {
+		//什么也不干，读操作不需要释放访问的行，也不会有事务依赖于该事务
+		//这里在clv1不用操作，因为不会依赖于任何事物，在clv2或者3，应该要有判断是否可以提交，或者这个活应该放到退休里去干
+	}else if (type == XP) {//回滚操作的话，需要将事务获取的行释放，然后执行回滚操作
+		row->free_row();
+		DEBUG_M("row_t::return_row XP free \n");
+		mem_allocator.free(row, row_t::get_row_size(ROW_DEFAULT_SIZE));
+		this->manager->lock_release(txn, XP);
+	} else if (type == WR) {//提交的话，对这行调用提交操作
+		assert (type == WR && row != NULL);
+		assert (row->get_schema() == this->get_schema());
+#if CLV == CLV1
+		this->manager->retire(txn, row);
+#endif
+		RC rc = this->manager->lock_release(txn, W);
+
 		assert(rc == RCOK);
 	}
 	return 0;

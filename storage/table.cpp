@@ -45,7 +45,7 @@ RC table_t::get_new_row(row_t *& row) {
 	return RCOK;
 }
 
-// the row is not stored locally. the pointer must be maintained by index structure.
+// the row is not stored locally. the pointer must be maintained by index structure.获得行，和索引有关
 RC table_t::get_general_new_row(row_t *& row, uint64_t part_id, uint64_t &row_id) {
 	RC rc = RCOK;
     DEBUG_M("table_t::get_new_row alloc\n");
@@ -60,6 +60,7 @@ RC table_t::get_general_new_row(row_t *& row, uint64_t part_id, uint64_t &row_id
     return rc;
 
 }
+//这里是初始化时调用的创建行的函数，被各个基准测试调用
 RC table_t::get_new_row(row_t *& row, uint64_t part_id, uint64_t &row_id) {
 
 	RC rc = RCOK;

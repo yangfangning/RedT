@@ -59,6 +59,7 @@ public:
   TxnManager* get_transaction_manager(uint64_t thd_id, uint64_t txn_id,uint64_t batch_id);
   void dump();
   void restart_txn(uint64_t thd_id, uint64_t txn_id,uint64_t batch_id);
+  void restart_prep(uint64_t thd_id, uint64_t txn_id,uint64_t batch_id);
   void release_transaction_manager(uint64_t thd_id, uint64_t txn_id, uint64_t batch_id);
   void update_min_ts(uint64_t thd_id, uint64_t txn_id,uint64_t batch_id,uint64_t ts);
   uint64_t get_min_ts(uint64_t thd_id);

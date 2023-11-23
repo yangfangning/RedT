@@ -20,6 +20,7 @@
 class table_t;
 class Catalog;
 class TxnManager;
+//代表完整的一行
 struct TsReqEntry {
 	TxnManager * txn;
 	// for write requests, need to have a copy of the data to write.

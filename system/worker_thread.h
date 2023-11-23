@@ -42,6 +42,9 @@ public:
     RC process_rack_rfin(Message * msg);
     RC process_rack_prep(yield_func_t &yield, Message * msg, uint64_t cor_id);
     RC process_rack_log(yield_func_t &yield, Message * msg, uint64_t cor_id);
+    RC process_rack_prep_cont(yield_func_t &yield, Message * msg, uint64_t cor_id);
+    RC process_rack_pre_prep(yield_func_t &yield, Message * msg, uint64_t cor_id);
+    RC process_set_co_ts(yield_func_t &yield, Message * msg, uint64_t cor_id);
     RC process_rlog(yield_func_t &yield, Message * msg, uint64_t cor_id);
     RC process_rack_fin_log(yield_func_t &yield, Message * msg, uint64_t cor_id);
     RC process_rfin_log(yield_func_t &yield, Message * msg, uint64_t cor_id);
