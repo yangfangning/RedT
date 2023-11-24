@@ -76,7 +76,7 @@ Message * Message::create_message(char * buf) {
 
 Message * Message::create_message(TxnManager * txn, RemReqType rtype, uint64_t txnid) {
  Message * msg = create_message(rtype);
- if(rtype == RACK_LOG || rtype == RACK_FIN_LOG ||  rtype == RACK_LOG_CONT){
+ if(rtype == RACK_LOG || rtype == RACK_FIN_LOG ||  rtype == RACK_PREP_CONT){
   msg->txn_id = txnid;
   ((AckMessage*)msg)->rc = RCOK;
  }else{

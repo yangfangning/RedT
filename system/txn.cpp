@@ -607,7 +607,7 @@ RC TxnManager::start_commit(yield_func_t &yield, uint64_t cor_id) {
 #if USE_REPLICA
 	send_prepare_messages();
 #if CC_ALG == MV_WOUND_WAIT || CC_ALG == MV_NO_WAIT
-    this->set_prepare_timestamp(get_next_ts());  
+    this->set_prepare_timestamp(glob_manager.get_ts(get_thd_id()));  
 	//直接更新本地最大prepare时间戳
     this->set_max_prepare_timestamp(this->get_prepare_timestamp());
 #endif
@@ -1265,7 +1265,7 @@ void TxnManager::retire(yield_func_t &yield, uint64_t cor_id) {
 		row_t * orig_r = txn->accesses[rid]->orig_row;
 		access_t type = txn->accesses[rid]->type;
 		if (type == WR) {
-			orig_r->manager->retire(this, txn->accesses[rid]->data);
+			orig_r->retire(this, txn->accesses[rid]->data);
 		}
 	}
 }

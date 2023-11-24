@@ -55,7 +55,7 @@ public:
   //在这里完成的操作应该是看输入的是什么操作，当读时通过时间戳判断怎么读，当是写时判断事务需要等待，或者是否中止，当读操作时，返回正确的当前行，否则返回不能读，或者等待，对于lockforread怎么设计还需要考虑，对于
 	RC access(TxnManager * txn, lock_t type, row_t * row);
   //释放写锁,这里其实可以分为很多，提交，终止，在什么阶段终止
-  RC lock_release(TxnManager * txn ,lock_t type);
+  void lock_release(TxnManager * txn ,lock_t type);
   //退休者，也就是可见操作
   void retire(TxnManager * txn, row_t * row);
   

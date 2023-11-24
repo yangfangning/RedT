@@ -370,7 +370,7 @@ RC WorkerThread::run(yield_func_t &yield, uint64_t cor_id) {
     DEBUG_T("worker run txn %ld type %d \n", msg->get_txn_id(),msg->get_rtype());
     if((msg->rtype != CL_QRY && msg->rtype != CL_QRY_O && msg->rtype != RLOG && msg->rtype != RFIN_LOG) || CC_ALG == CALVIN) {
       txn_man = get_transaction_manager(msg);//获取事务的管理器，没有就建一个
-      if(msg->rtype == RACK_LOG || msg->rtype == RACK_FIN_LOG || msg->rtype == RACK_FIN || msg->rtype == RACK_PREP || msg->rtype == RACK_PREP_CONT:
+      if(msg->rtype == RACK_LOG || msg->rtype == RACK_FIN_LOG || msg->rtype == RACK_FIN || msg->rtype == RACK_PREP || msg->rtype == RACK_PREP_CONT
       //  || msg->rtype == RPREPARE
        ){ 
         // printf("txn %ld type %d check already commit\n", msg->get_txn_id(),msg->get_rtype());
@@ -505,7 +505,7 @@ RC WorkerThread::process_rfin(yield_func_t &yield, Message * msg, uint64_t cor_i
     txn_man->retire(yield, cor_id);
   }
 #endif
-  if (msg->rc == RCOK){
+  if (txn_man->get_rc() == RCOK){
     txn_man->txn_state = COMMITING;
   }
 

@@ -75,7 +75,7 @@ RC TPCCTxnManager::run_txn(yield_func_t &yield, uint64_t cor_id) {
 #if MODE == SETUP_MODE
 	return RCOK;
 #endif
-	RC txn->rc = RCOK;
+	RC rc = txn->rc;
 	uint64_t starttime = get_sys_clock();
 
 #if CC_ALG == CALVIN

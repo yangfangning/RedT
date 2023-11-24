@@ -58,7 +58,7 @@ private:
     bool blatch;
 
     row_t * _row;
-    RC can_lock(lock_t type, TxnManager * txn, ts_t start_ts)
+    RC can_lock(lock_t type, TxnManager *txn, ts_t start_ts);
     void get_lock(lock_t type, TxnManager * txn);
     void release_lock(lock_t type, TxnManager * txn);
 

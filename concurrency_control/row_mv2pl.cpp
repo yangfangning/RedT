@@ -110,7 +110,7 @@ RC Row_mv2pl::access(TxnManager * txn, lock_t type, row_t * row) {
             if (whis == NULL || whis->ts < start_ts){//可能能读到未提交的数据
                 //当本地时间戳没确定时直接跳过，说明处于运行状态，当确定后还小于开始时间戳，等待，本地提交时间戳大于开始时间戳的话说明读不到新建的版本，跳过，对于终止的事务，终止时是状态先确定还是
                 if(owner->txn->get_prepare_timestamp() < start_ts){
-                    Mv2plEntry * entry = creat_2pl_entry();
+                    Mv2plEntry * entry = create_2pl_entry();
                     entry->start_ts = get_sys_clock();
                     entry->txn = txn;
                     entry->type = type;
@@ -168,7 +168,7 @@ RC Row_mv2pl::access(TxnManager * txn, lock_t type, row_t * row) {
                 if (canwound){
                   owner->txn->set_rc(Abort);
                 }
-                Mv2plEntry * entry = creat_2pl_entry();
+                Mv2plEntry * entry = create_2pl_entry();
                 entry->start_ts = get_sys_clock();
                 entry->txn = txn;
                 entry->type = type;
@@ -189,8 +189,8 @@ RC Row_mv2pl::access(TxnManager * txn, lock_t type, row_t * row) {
                 }
 
                 waiter_cnt ++;
-                DEBUG("lk_wait (%ld,%ld): own type %d, req type %d, key %ld %lx\n",
-                    txn->get_txn_id(), txn->get_batch_id(), lock_type, type,
+                DEBUG("lk_wait (%ld,%ld): req type %d, key %ld %lx\n",
+                    txn->get_txn_id(), txn->get_batch_id(), type,
                     _row->get_primary_key(), (uint64_t)_row);
                 //txn->twopl_wait_start = get_sys_clock();
                 rc = WAIT;
@@ -321,7 +321,7 @@ void Row_mv2pl::lock_release(TxnManager * txn, lock_t type){
         pthread_mutex_lock(latch);
         }
     //有可能出现级联回滚情况
-    if(type == XP){
+    if(type == XP1){
         Mv2plEntry * retire = owner;
 #if CLV == CLV2 || CLV == CLV3
         //清空这个事务的依赖列表，这个都要做，所以到开头去

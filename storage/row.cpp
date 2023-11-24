@@ -458,7 +458,7 @@ RC row_t::get_row_post_wait(access_t type, TxnManager * txn, row_t *& row) {
   INC_STATS(txn->get_thd_id(), trans_cur_row_init_time, get_sys_clock() - init_time);
 	return rc;
 }
-
+void row_t::retire(TxnManager *txn, row_t *row) { this->manager->retire(txn, row); }
 // the "row" is the row read out in get_row(). For locking based CC_ALG,
 // the "row" is the same as "this". For timestamp based CC_ALG, the
 // "row" != "this", and the "row" must be freed.
@@ -512,16 +512,14 @@ uint64_t row_t::return_row(RC rc, access_t type, TxnManager *txn, row_t *row) {
 		row->free_row();
 		DEBUG_M("row_t::return_row XP free \n");
 		mem_allocator.free(row, row_t::get_row_size(ROW_DEFAULT_SIZE));
-		this->manager->lock_release(txn, XP);
+		this->manager->lock_release(txn, XP1);
 	} else if (type == WR) {//提交的话，对这行调用提交操作
 		assert (type == WR && row != NULL);
 		assert (row->get_schema() == this->get_schema());
 #if CLV == CLV1
 		this->manager->retire(txn, row);
 #endif
-		RC rc = this->manager->lock_release(txn, W);
-
-		assert(rc == RCOK);
+		this->manager->lock_release(txn, W);
 	}
 	return 0;
 #elif CC_ALG == OCC
