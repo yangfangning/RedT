@@ -484,8 +484,10 @@ RC WorkerThread::run(yield_func_t &yield, uint64_t cor_id) {
 }
 
 RC WorkerThread::process_set_co_ts(yield_func_t &yield, Message * msg, uint64_t cor_id) {
+#if CLV == CLV3
   txn_man->set_commit_timestamp(((FinishMessage*)msg)->commit_timestamp);
   txn_man->retire(yield, cor_id);
+#endif
   return RCOK;
 }
 
@@ -774,7 +776,9 @@ RC WorkerThread::process_rack_pre_prep(yield_func_t &yield, Message * msg, uint6
   }
   responses_left = txn_man->received_pre_response(((AckMessage*)msg)->rc);
   //计算最大提交时间戳，这里只有这种并发控制才有,本地的在txn中直接生成并计算了
+#if CC_ALG == MV_NO_WAIT || CC_ALG == MV_WOUND_WAIT
   txn_man->set_max_prepare_timestamp(((AckMessage*)msg)->prepare_timestamp);
+#endif
   assert(responses_left >= 0);
   if (responses_left > 0) return WAIT;
 

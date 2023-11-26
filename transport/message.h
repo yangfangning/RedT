@@ -191,9 +191,7 @@ public:
   uint64_t max_tid;
 #endif
 #if CC_ALG == MV_WOUND_WAIT || CC_ALG == MV_NO_WAIT
-#if CLV == CLV1 || CLV == CLV2 || CLV == CLV3
   uint64_t prepare_timestamp;
-#endif
 #endif
 
   // For Calvin PPS: part keys from secondary lookup for sequencer response

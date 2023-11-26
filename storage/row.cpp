@@ -458,7 +458,11 @@ RC row_t::get_row_post_wait(access_t type, TxnManager * txn, row_t *& row) {
   INC_STATS(txn->get_thd_id(), trans_cur_row_init_time, get_sys_clock() - init_time);
 	return rc;
 }
+#if CC_ALG == MV_NO_WAIT || CC_ALG == MV_WOUND_WAIT
 void row_t::retire(TxnManager *txn, row_t *row) { this->manager->retire(txn, row); }
+#else
+void row_t::retire(TxnManager *txn, row_t *row) {}
+#endif
 // the "row" is the row read out in get_row(). For locking based CC_ALG,
 // the "row" is the same as "this". For timestamp based CC_ALG, the
 // "row" != "this", and the "row" must be freed.
