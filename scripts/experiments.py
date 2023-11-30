@@ -368,6 +368,7 @@ def ycsb_early_cross_dc():
     exp = [[wl,n,algo,base_table_size*n,tup_wr_perc,txn_wr_perc,ld,ir,er,sk,thr,cro_dc_perc] for thr,txn_wr_perc,tup_wr_perc,ld,n,sk,algo,cro_dc_perc,ir,er in itertools.product(tcnt,txn_write_perc,tup_write_perc,load,nnodes,skew,algos,cross_dc_perc,tapir,early)]
     return fmt,exp
 
+#测试数据中心间事务比率的影响
 def ycsb_cross_dc():
     wl = 'YCSB'
     nnodes = [8]
@@ -387,6 +388,11 @@ def ycsb_cross_dc():
     fmt = ["WORKLOAD","NODE_CNT","CC_ALG","SYNTH_TABLE_SIZE","TUP_WRITE_PERC","TXN_WRITE_PERC","MAX_TXN_IN_FLIGHT","USE_TAPIR","EARLY_PREPARE","ZIPF_THETA","THREAD_CNT","CROSS_DC_TXN_PERC"]
     exp = [[wl,n,algo,base_table_size*n,tup_wr_perc,txn_wr_perc,ld,ir,er,sk,thr,cro_dc_perc] for thr,txn_wr_perc,tup_wr_perc,ld,n,sk,algo,cro_dc_perc,ir,er in itertools.product(tcnt,txn_write_perc,tup_write_perc,load,nnodes,skew,algos,cross_dc_perc,tapir,early)]
     return fmt,exp
+
+#thr, txn_wr_perc,    tup_wr_perc,   ld,  n,     sk, algo,  cro_dc_perc,  net_del,       ir,  er
+#tcnt,txn_write_perc, tup_write_perc,load,nnodes,skew,algos,cross_dc_perc,network_delay,tapir,early
+#wl, ,base_table_size*n,txn_wr_perc,ld,ir,er,sk,cro_dc_perc,net_del
+
 
 def ycsb_tapir_network_delay():
     wl = 'YCSB'

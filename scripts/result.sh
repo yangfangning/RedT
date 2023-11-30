@@ -14,6 +14,7 @@ Latency="trans_total_run_time
           txn_manager_time txn_manager_time_percent
           lat_l_loc_cc_time lat_l_loc_cc_time_percent
           trans_init_time trans_init_time_percent"
+#shift的操作是将参数去掉一个，将剩下的参数的第一个是$1
 while [[ $# -gt 0 ]]
 do
     case $1 in

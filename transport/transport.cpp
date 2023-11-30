@@ -49,9 +49,16 @@ void Transport::read_ifconfig(const char * ifaddr_file) {
 		ifstream fin(ifaddr_file);
 		string line;
 	while (getline(fin, line)) {
+    if (line[line.length()-1] == '\r') {
+				line.erase(line.length()-1);
+		}
+		if (line[0] == '\t') {
+			line.erase(0,1);
+		}
 			//memcpy(ifaddr[cnt],&line[0],12);
-			ifaddr[cnt] = new char[line.length()+1];
+		ifaddr[cnt] = new char[line.length()+1];
 		strcpy(ifaddr[cnt],&line[0]);
+
 			printf("%ld: %s\n",cnt,ifaddr[cnt]);
 			cnt++;
 		}

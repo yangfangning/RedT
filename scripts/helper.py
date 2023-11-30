@@ -1046,6 +1046,7 @@ def get_execfile_name(cfgs,fmt,network_hosts=[]):
     return output_f
 
 
+#设置一个文件名，具体操作不懂
 def get_outfile_name(cfgs,fmt,network_hosts=[]):
     output_f = ""
     nettest = False
@@ -1078,6 +1079,7 @@ def get_outfile_name(cfgs,fmt,network_hosts=[]):
                     output_f += "{}-{}_".format(nkey,cfgs[key])
     return output_f
 
+#设置相关配置
 def get_cfgs(fmt,e):
     cfgs = dict(configs)
     for f,n in zip(fmt,range(len(fmt))):

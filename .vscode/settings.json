@@ -98,5 +98,6 @@
         "__tuple": "cpp",
         "__functional_03": "cpp",
         "ciso646": "cpp"
-    }
+    },
+    "editor.inlineSuggest.showToolbar": "onHover"
 }

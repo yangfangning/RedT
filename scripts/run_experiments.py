@@ -9,11 +9,15 @@ from run_config import *
 import glob
 import time
 
+# 当前时间
 now = datetime.datetime.now()
+# 格式化当前时间
 strnow=now.strftime("%Y%m%d-%H%M%S")
 
+#返回上一级目录
 os.chdir('..')
 
+#获得系统路径
 PATH=os.getcwd()
 
 result_dir = PATH + "/results/" + strnow + '/'
@@ -21,24 +25,35 @@ perf_dir = result_dir + 'perf/'
 
 cfgs = configs
 
+#执行
 execute = True
+#远程执行
 remote = False
+#istc或者vcloud
 cluster = None
+#没啥用
 skip = False
 
+#测试列表，存的是ycsb或者tpcc
 exps=[]
 arg_cluster = False
+#没啥用
 merge_mode = False
+#设置数据中心？
 set_dc = False
+#数据中心数量
 dc_count = 0
 perfTime = 60
 fromtimelist=[]
 totimelist=[]
 cpu_usage_index=0
 set_latency = 0
+#数据中心间延迟
 latency = 0
+#延迟波动范围
 latency_range = 0
 
+#调用这个程序的参数不得少于两个
 if len(sys.argv) < 2:
      sys.exit("Usage: %s [-exec/-e/-noexec/-ne] [-c cluster] experiments\n \
             -exec/-e: compile and execute locally (default)\n \
@@ -85,9 +100,11 @@ for arg in sys.argv[1:]:
         exps.append(arg)
 
 for exp in exps:
+    #fmt代表键，exper代表对应的值列表
     fmt,experiments = experiment_map[exp]()
 
     for e in experiments:
+        #获得上述函数中设置的configs的值
         cfgs = get_cfgs(fmt,e)
         if remote:
             cfgs["TPORT_TYPE"], cfgs["TPORT_TYPE_IPC"], cfgs["TPORT_PORT"] = "tcp", "false", 6222
@@ -95,6 +112,7 @@ for exp in exps:
         output_dir = output_f + "/"
         output_f += strnow
 
+        #打开config文件，将里面的每一行放进lines，将cfgs中的配置写进config文件中
         f = open("config.h", 'r')
         lines = f.readlines()
         f.close()
@@ -116,9 +134,11 @@ for exp in exps:
             exit()
 
         if execute:
+            #创建目录
             cmd = "mkdir -p {}".format(perf_dir)
             print (cmd)
             os.system(cmd)
+            #复制config文件到result_dir目录下，并重命名为output_f.cfg
             cmd = "cp config.h {}{}.cfg".format(result_dir,output_f)
             print (cmd)
             os.system(cmd)
@@ -136,7 +156,9 @@ for exp in exps:
                 else:
                     assert(False)
                 # machines = machines_[:(cfgs["NODE_CNT"]+1)]
+                #获取服务器加客户端数量的机器数量
                 machines = machines_[:(cfgs["NODE_CNT"]+cfgs["CLIENT_NODE_CNT"])]
+                #将机器名称输出到ifconfig文件中
                 with open("ifconfig.txt", 'w') as f_ifcfg:
                     for m in machines:
                         f_ifcfg.write(m + "\n")
@@ -150,11 +172,12 @@ for exp in exps:
                 #     files = ["rundb", "runcl", "ifconfig.txt", "./benchmarks/TPCC_short_schema.txt", "./benchmarks/TPCC_full_schema.txt"]
                 # elif cfgs["WORKLOAD"] == "YCSB":
                 #     files = ["rundb", "runcl", "ifconfig.txt", "benchmarks/YCSB_schema.txt"]
-
+                #生成一个迭代器，里面是机器和文件的所有组合，将文件复制到远程机器上
                 for m, f in itertools.product(machines, files):
                     if cluster == 'istc':
                         cmd = 'scp {}/{} {}.csail.mit.edu:/{}/'.format(PATH, f, m, uname)
                     elif cluster == 'vcloud':
+                        #在远程服务器上杀死运行中的名为 "rundb" 和 "runcl" 的进程
                         os.system('sh scripts/kill.sh {}'.format(m))
                         cmd = 'scp {}/{} {}:/{}'.format(PATH, f, m, uname)
                     print (cmd)
@@ -164,23 +187,28 @@ for exp in exps:
                     # elif cluster == 'vcloud':
                     #     os.system('./scripts/kill.sh {}'.format(m))
                     #     cmd = 'ssh {}/{} {}:/{}'.format(PATH, f, m, uname)
+                #部署config文件
                 print("Deploying: {}".format(output_f))
                 os.chdir('./scripts')
                 if cluster == 'istc':
                     cmd = 'sh deploy.sh \'{}\' /{}/ {}'.format(' '.join(machines), uname, cfgs["NODE_CNT"])
                 elif cluster == 'vcloud':
+                    #join后形成的数组，只node_cnt数量的运行rundb，其他运行rundb
                     cmd = 'sh vcloud_deploy.sh \'{}\' /{}/ {} {} {} {} {} {}'.format(' '.join(machines), uname, cfgs["NODE_CNT"], perfTime, uname2, dc_count, latency, latency_range)
                 print (cmd)
                 fromtimelist.append(str(int(time.time())) + "000")
                 os.system(cmd)
                 totimelist.append(str(int(time.time())) + "000")
                 perfip = machines[0]
+                #将这个文件复制到远程机器上
                 cmd = "scp getFlame.sh {}:/{}/".format(perfip, uname)
                 print (cmd)
                 os.system(cmd)
+                #在远程执行，这个sh脚本会检查是否存在pref report进程，没有花性能图
                 cmd = 'ssh {} "bash /{}/getFlame.sh"'.format(perfip, uname)
                 print (cmd)
                 os.system(cmd)
+                #将上面画的图，复制到本地，并重命名
                 cmd = "scp {}:/{}/perf.svg {}{}.svg".format(perfip, uname, perf_dir, output_f)
                 print (cmd)
                 os.system(cmd)
@@ -195,6 +223,7 @@ for exp in exps:
                         print (cmd)
                         os.system(cmd)
                     elif cluster == 'vcloud':
+                        #运行rundb和runcl后，会将输出输出到这个文件，将这个文件复制到本地并重命名
                         cmd = 'scp {}:/{}/dbresults{}.out results/{}/{}_{}.out'.format(m,uname,n,strnow,n,output_f)
                         print (cmd)
                         os.system(cmd)
@@ -221,67 +250,70 @@ for exp in exps:
                 for n in range(nnodes + nclnodes):
                     pids[n].wait()
 
+#获取输入的参数，并去重后升序排列
+#并发控制方法
     al = []
     for e in experiments:
         al.append(e[2])
     al = sorted(list(set(al)))
-
+#线程数量
     tcnt = []
     for e in experiments:
         tcnt.append(e[-2])
     # for e in experiments:
     #     tcnt.append(e[-6])
     tcnt = sorted(list(set(tcnt)))
-
+#cross_dc_perc，数据中心间事务比率
     cocnt = []
     for e in experiments:
         cocnt.append(e[-1])
     cocnt = sorted(list(set(cocnt)))
+#线程数量
     sk = []
     for e in experiments:
         sk.append(e[-2])
     sk = sorted(list(set(sk)))
-   
+#cross_dc_perc，数据中心间事务比率  
     dcp = []
     for e in experiments:
         dcp.append(e[-1])
     dcp = sorted(list(set(dcp)))
-    
+#cross_dc_perc，数据中心间事务比率   
     nd = []
     for e in experiments:
         nd.append(e[-1])
     nd = sorted(list(set(nd)))
-
+#元组写事务的比率tup_write_perc
     wr = []
     for e in experiments:
         wr.append(e[4])
     wr = sorted(list(set(wr)))
-
+#node-cnt
     cn = []
     for e in experiments:
         cn.append(e[1])
     cn = sorted(list(set(cn)))
-
+#skew倾斜率
     ld = []
     for e in experiments:
         ld.append(e[-3])
     ld = sorted(list(set(ld)))
-
+#元组写事务的比率tup_write_perc
     part = []
     for e in experiments:
         part.append(e[4])
     part = sorted(list(set(part)))
-
+#事务写事务的比率txn_write_perc
     dc = []
     for e in experiments:
         dc.append(e[5])
     dc = sorted(list(set(dc)))
-
+#cross_dc_perc，数据中心间事务比率
     tpcc_ld = []
     for e in experiments:
         tpcc_ld.append(e[-1])
     tpcc_ld = sorted(list(set(tpcc_ld)))
-
+#cross_dc_perc，数据中心间事务比率
     ccnt = []
     for e in experiments:
         ccnt.append(e[-1])

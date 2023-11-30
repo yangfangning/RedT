@@ -126,7 +126,8 @@
 #define TIME_ENABLE         true //STATS_ENABLE
 
 #define FIN_BY_TIME true
-#define MAX_TXN_IN_FLIGHT 320
+//每个服务器上运行的最大事务数量
+#define MAX_TXN_IN_FLIGHT 100
 
 #define SERVER_GENERATE_QUERIES false
 
@@ -589,7 +590,7 @@ enum PPSTxnType {
 #define PROG_TIMER 10 * BILLION // in s
 #define BATCH_TIMER 0
 #define SEQ_BATCH_TIMER 5 * 1 * MILLION // ~5ms -- same as CALVIN paper
-#define DONE_TIMER 1 * 20 * BILLION // ~1 minutes
+#define DONE_TIMER 1 * 60 * BILLION // ~1 minutes
 #define WARMUP_TIMER 1 * 10 * BILLION // ~1 minutes
 
 #define SEED 0

@@ -415,13 +415,13 @@ RC row_t::get_row(access_t type, TxnManager * txn, row_t *& row, uint64_t &orig_
 RC row_t::get_row_post_wait(access_t type, TxnManager * txn, row_t *& row) {
 	RC rc = RCOK;
   uint64_t init_time = get_sys_clock();
-	assert(CC_ALG == WAIT_DIE || CC_ALG == MVCC || CC_ALG == TIMESTAMP || CC_ALG == TIMESTAMP || CC_ALG == WOUND_WAIT || CC_ALG == SSI || CC_ALG == MV_WAIT_DIE || CC_ALG == MV_WOUND_WAIT);
+	assert(CC_ALG == WAIT_DIE || CC_ALG == MVCC || CC_ALG == TIMESTAMP || CC_ALG == TIMESTAMP || CC_ALG == WOUND_WAIT || CC_ALG == SSI || CC_ALG == MV_WAIT_DIE || CC_ALG == MV_WOUND_WAIT || CC_ALG == MV_NO_WAIT);
 #if CC_ALG == WAIT_DIE || CC_ALG == WOUND_WAIT
 	assert(txn->lock_ready);
 	rc = RCOK;
 	//ts_t endtime = get_sys_clock();
 	row = this;
-#elif CC_ALG == MV_WOUND_WAIT || CC_ALG == MV_WAIT_DIE
+#elif CC_ALG == MV_WOUND_WAIT || CC_ALG == MV_WAIT_DIE || CC_ALG == MV_NO_WAIT
 	assert(txn->lock_ready);
 	row = txn->cur_row;
 	if (type == WR) {
