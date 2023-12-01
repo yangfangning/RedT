@@ -33,6 +33,7 @@ void Row_mv2pl::init(row_t *row) {
     retire_tail = NULL;
 
     waiter_cnt = 0;
+    whis_len = 0;
     max_retire_cts = 0;
 
     writehis = NULL;
