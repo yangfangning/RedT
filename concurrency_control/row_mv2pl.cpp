@@ -25,7 +25,6 @@
 void Row_mv2pl::init(row_t *row) { 
 	_row = row;
     owner = NULL;
-    owner = (Mv2plEntry*) mem_allocator.alloc(sizeof(Mv2plEntry));
     waiters_head = NULL;
     waiters_tail = NULL;
     waiters_read_head = NULL;
@@ -292,7 +291,7 @@ RC Row_mv2pl::access(TxnManager * txn, lock_t type, row_t * row) {
         }  
 
         if(rc = RCOK){
-            clear_history(txn);
+            //clear_history(txn);
         } 
     }
 final:
@@ -435,7 +434,7 @@ void Row_mv2pl::lock_release(TxnManager * txn, lock_t type){
         retire_head->commited = true;
         retire_head = retire_head->prev;
 #endif
-        clear_history(txn);
+        //clear_history(txn);
     }
     
 
@@ -540,7 +539,8 @@ void Row_mv2pl::retire(TxnManager *txn, row_t *row) {
         owner = NULL;
     }
     release_2pl_entry(retire);
- 
+    if (g_central_man) glob_manager.release_row(_row);
+    else pthread_mutex_unlock( latch );
 }
 
 

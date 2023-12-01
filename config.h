@@ -84,16 +84,16 @@
 // Simulation + Hardware
 /***********************************************/
 #define CENTER_CNT 4
-#define NODE_CNT 8
-#define THREAD_CNT 40
+#define NODE_CNT 3
+#define THREAD_CNT 1
 #define REM_THREAD_CNT 1
 #define SEND_THREAD_CNT 1
 #define COROUTINE_CNT 4
-#define CORE_CNT 2
+#define CORE_CNT 4
 // PART_CNT should be at least NODE_CNT
 #define PART_CNT NODE_CNT
 #define CLIENT_NODE_CNT 1
-#define CLIENT_THREAD_CNT 4
+#define CLIENT_THREAD_CNT 1
 #define CLIENT_REM_THREAD_CNT 1
 #define CLIENT_SEND_THREAD_CNT 1
 #define CLIENT_RUNTIME false
@@ -109,21 +109,21 @@
 // each transaction only accesses only 1 virtual partition. But the lock/ts manager and index are
 // not aware of such partitioning. VIRTUAL_PART_CNT describes the request distribution and is only
 // used to generate queries. For HSTORE, VIRTUAL_PART_CNT should be the same as PART_CNT.
-#define VIRTUAL_PART_CNT    PART_CNT
-#define PAGE_SIZE         4096
-#define CL_SIZE           64
-#define CPU_FREQ          2.6
+#define VIRTUAL_PART_CNT PART_CNT
+#define PAGE_SIZE 4096
+#define CL_SIZE 64
+#define CPU_FREQ 2.6
 // enable hardware migration.
-#define HW_MIGRATE          false
+#define HW_MIGRATE false
 
 // # of transactions to run for warmup
-#define WARMUP            0
-// YCSB or TPCC or PPS or DA
-#define WORKLOAD YCSB
+#define WARMUP 0
+// YCSB or TPCC or PPS
+#define WORKLOAD TPCC
 // print the transaction latency distribution
 #define PRT_LAT_DISTR false
-#define STATS_ENABLE        true
-#define TIME_ENABLE         true //STATS_ENABLE
+#define STATS_ENABLE true
+#define TIME_ENABLE true  // STATS_ENABLE
 
 #define FIN_BY_TIME true
 #define MAX_TXN_IN_FLIGHT 320
@@ -139,17 +139,17 @@
 //    pool
 // 3. per-partition malloc. each partition has its own memory pool
 //    which is mapped to a unique tile on the chip.
-#define MEM_ALLIGN          8
+#define MEM_ALLIGN 8
 
 // [THREAD_ALLOC]
-#define THREAD_ALLOC        false
-#define THREAD_ARENA_SIZE     (1UL << 22)
-#define MEM_PAD           true
+#define THREAD_ALLOC false
+#define THREAD_ARENA_SIZE (1UL << 22)
+#define MEM_PAD true
 
 // [PART_ALLOC]
-#define PART_ALLOC          false
-#define MEM_SIZE          (1UL << 30)
-#define NO_FREE           false
+#define PART_ALLOC false
+#define MEM_SIZE (1UL << 30)
+#define NO_FREE false
 
 /***********************************************/
 // Message Passing
@@ -182,9 +182,9 @@
 #define ISOLATION_LEVEL SERIALIZABLE
 //并发控制WAIT_DIE, NO_WAIT, DL_DETECT, TIMESTAMP, MVCC, HSTORE, OCC, VLL, SUNDIAL, SILO, BOCC, FOCC, SSI, WS
 //新增的并发控制MV_NO_WAIT，MV_WOUND_WAIT,MV_WAIT_DIE,MV_DL_DETECT
-#define CC_ALG MV_WOUND_WAIT
+#define CC_ALG MV_NO_WAIT
 
-#define CLV CLV2
+#define CLV CLV1
 
 #define YCSB_ABORT_MODE false
 #define QUEUE_C  APACITY_NEW 1000000
@@ -313,11 +313,11 @@
 // Benchmark
 /***********************************************/
 // max number of rows touched per transaction
-#define MAX_ROW_PER_TXN       64
+#define MAX_ROW_PER_TXN       32
 #define QUERY_INTVL         1UL
 #define MAX_TXN_PER_PART 10000
 #define FIRST_PART_LOCAL      true
-#define MAX_TUPLE_SIZE        1024 // in bytes
+#define MAX_TUPLE_SIZE        64 // in bytes
 #define GEN_BY_MPR false
 // ==== [YCSB] ====
 // SKEW_METHOD:
@@ -342,11 +342,11 @@
 #define STRICT_PPT 1
 //only consider the primary replica here,
 //try keep part_per_txn=2 when use CROSS_DC_TXN_PERC
-#define CROSS_DC_TXN_PERC 1.0
+#define CROSS_DC_TXN_PERC 0
 // ==== [TPCC] ====
 // For large warehouse count, the tables do not fit in memory
 // small tpcc schemas shrink the table size.
-#define TPCC_SMALL          false
+#define TPCC_SMALL          true
 #define MAX_ITEMS_SMALL 10000
 #define CUST_PER_DIST_SMALL 2000
 #define MAX_ITEMS_NORM 100000
@@ -392,10 +392,10 @@ enum DATxnType {
 #define MAX_DA_TABLE_SIZE 10000
 extern TPCCTxnType g_tpcc_txn_type;
 //#define TXN_TYPE          TPCC_ALL
-#define PERC_PAYMENT 0.0
-#define FIRSTNAME_MINLEN      8
-#define FIRSTNAME_LEN         16
-#define LASTNAME_LEN        16
+#define PERC_PAYMENT 1.0
+#define FIRSTNAME_MINLEN 8
+#define FIRSTNAME_LEN 16
+#define LASTNAME_LEN 16
 
 #define DIST_PER_WH       10
 
@@ -452,7 +452,7 @@ enum PPSTxnType {
 #define DEBUG_TIMESTAMP       false
 #define DEBUG_SYNTH         false
 #define DEBUG_ASSERT        false
-#define DEBUG_DISTR false
+#define DEBUG_DISTR true
 #define DEBUG_TXN false
 #define DEBUG_ALLOC false
 #define DEBUG_RACE false
@@ -469,7 +469,6 @@ enum PPSTxnType {
 // NOCC Don't do CC
 // NORMAL normal operation
 #define MODE NORMAL_MODE
-
 
 /***********************************************/
 // Constant
@@ -589,8 +588,8 @@ enum PPSTxnType {
 #define PROG_TIMER 10 * BILLION // in s
 #define BATCH_TIMER 0
 #define SEQ_BATCH_TIMER 5 * 1 * MILLION // ~5ms -- same as CALVIN paper
-#define DONE_TIMER 1 * 20 * BILLION // ~1 minutes
-#define WARMUP_TIMER 1 * 10 * BILLION // ~1 minutes
+#define DONE_TIMER 1 * 60 * BILLION // ~1 minutes
+#define WARMUP_TIMER 1 * 60 * BILLION // ~1 minutes
 
 #define SEED 0
 #define SHMEM_ENV false

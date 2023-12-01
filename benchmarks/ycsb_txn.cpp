@@ -386,6 +386,9 @@ RC YCSBTxnManager::run_txn_state(yield_func_t &yield, uint64_t cor_id) {
 			if(ycsb_query->requests[next_record_id]->acctype == WR && IS_LOCAL(get_txn_id())) 	
 				ycsb_query->partitions_modified.add_unique(part_id);
 			rc = run_ycsb_0(yield,req,row,cor_id);
+			if (rc = RCOK) {
+				assert(row != NULL);
+			}
 		} else {
 #if PARAL_SUBTXN == true
 			rc = RCOK;
@@ -397,7 +400,7 @@ RC YCSBTxnManager::run_txn_state(yield_func_t &yield, uint64_t cor_id) {
 	case YCSB_1 :
 		//read local row,for message queue by TCP/IP,write set has actually been written in this point,
 		if(loc) {
-			rc = run_ycsb_1(req->acctype,row);  
+            rc = run_ycsb_1(req->acctype, row);  
 		} else {
 			rc = RCOK;
 		}
@@ -424,6 +427,7 @@ RC YCSBTxnManager::run_ycsb_0(yield_func_t &yield,ycsb_request * req,row_t *& ro
   m_item = index_read(_wl->the_index, req->key, part_id);
   starttime = get_sys_clock();
   row_t * row = ((row_t *)m_item->location);
+  assert(row != NULL);
   INC_STATS(get_thd_id(),trans_benchmark_compute_time,get_sys_clock() - starttime);
   rc = get_row(yield,row, type,row_local,cor_id);
   return rc;

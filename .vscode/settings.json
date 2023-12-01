@@ -97,6 +97,8 @@
         "__tree": "cpp",
         "__tuple": "cpp",
         "__functional_03": "cpp",
-        "ciso646": "cpp"
-    }
+        "ciso646": "cpp",
+        "variant": "cpp"
+    },
+    "cmake.sourceDirectory": "/root/mv2pl"
 }

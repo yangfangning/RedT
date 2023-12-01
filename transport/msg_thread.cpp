@@ -504,7 +504,7 @@ void MessageThread::run() {
 
 #if ONE_NODE_RECIEVE == 1 && defined(NO_REMOTE) && LESS_DIS_NUM == 10
 #else
-  assert(dest_node_id != g_node_id);
+  //assert(dest_node_id != g_node_id);
 #endif
 
   sbuf = buffer[dest_node_id];

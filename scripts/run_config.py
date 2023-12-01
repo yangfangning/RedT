@@ -24,6 +24,7 @@ istc_machines=[
 "istc2",
 "istc5",
 ]
+#用户名
 username = "ibtest"
 vcloud_uname = 'home/ibtest'
 

@@ -47,65 +47,65 @@ DBMS BENCHMARK
 
 dbms benchmark has the following parameters in the config file. Parameters with a * sign should not be changed.
 
-  CORE_CNT		: number of cores modeled in the system.
-  NODE_CNT		: number of computation nodes modeled in the system
-  PART_CNT		: number of logical partitions in the system; Should equal CORE_CNT * NODE_CNT
-  THREAD_CNT	: number of worker threads
-  REM_THREAD_CNT	: number of message receiver threads
-  SEND_THREAD_CNT	: number of message sender threads
-  TPORT_TYPE : communication protocol (TCP, IPC)
+  CORE_CNT		: number of cores modeled in the system.内核数
+  NODE_CNT		: number of computation nodes modeled in the system计算节点数
+  PART_CNT		: number of logical partitions in the system; Should equal CORE_CNT * NODE_CNT逻辑分区数
+  THREAD_CNT	: number of worker threads工作线程数
+  REM_THREAD_CNT	: number of message receiver threads信息接收线程数
+  SEND_THREAD_CNT	: number of message sender threads消息发送线程数
+  TPORT_TYPE : communication protocol (TCP, IPC)通信协议
   ENVIRONMENT_EC2 : true if running on Amazon EC2
 
-  PAGE_SIZE		: memory page size
-  CL_SIZE		: cache line size
+  PAGE_SIZE		: memory page size内存页面大小
+  CL_SIZE		: cache line size缓存行大小
 
-  DONE_TIMER : number of nanoseconds to run experiment
-  WARMUP_TIMER		: number of nanoseconds to run for warmup
+  DONE_TIMER : number of nanoseconds to run experiment运行试验的纳秒数
+  WARMUP_TIMER		: number of nanoseconds to run for warmup预热的纳秒数
   SEQ_BATCH_TIMER : number of nanoseconds between CALVIN batches
   WORKLOAD		: workload supported (TPCC, YCSB, or PPS)
   CC_ALG		: concurrency control algorithm (WAIT_DIE, NO_WAIT, TIMESTAMP, MVCC, CALVIN, or MAAT)
   ISOLATION_LEVEL : system isolation level (SERIALIZABLE, READ_COMMITTED, READ_UNCOMMITTED, or NOLOCK)
 
-  THREAD_ALLOC	: per thread allocator.
-  * MEM_PAD		: enable memory padding to avoid false sharing.
-  MEM_ALLIGN	: allocated blocks are alligned to MEM_ALLIGN bytes
+  THREAD_ALLOC	: per thread allocator.每个线程的分配器
+  * MEM_PAD		: enable memory padding to avoid false sharing.内存填充
+  MEM_ALLIGN	: allocated blocks are alligned to MEM_ALLIGN bytes分配的内存对齐方式
 
   * ROLL_BACK		: roll back the modifications if a transaction aborts.
 
   ENABLE_LATCH  : enable latching in btree index
-  * CENTRAL_INDEX : centralized index structure
-  * CENTRAL_MANAGER	: centralized lock/timestamp manager
-  INDEX_STRCT	: data structure for index.
-  BTREE_ORDER	: fanout of each B-tree node
+  * CENTRAL_INDEX : centralized index structure集中式索引
+  * CENTRAL_MANAGER	: centralized lock/timestamp manager集中式索引结构
+  INDEX_STRCT	: data structure for index.索引数据结构
+  BTREE_ORDER	: fanout of each B-tree node b数节点的扇出量
 
-  TS_TWR		: enable Thomas Write Rule (TWR) in TIMESTAMP
-  HIS_RECYCLE_LEN	: in MVCC, history will be recycled if they are too long.
-  MAX_WRITE_SET	: the max size of a write set in OCC.
+  TS_TWR		: enable Thomas Write Rule (TWR) in TIMESTAMP  托马斯写入规则
+  HIS_RECYCLE_LEN	: in MVCC, history will be recycled if they are too long.历史过长回收
+  MAX_WRITE_SET	: the max size of a write set in OCC.写入集最大大小
 
-  MAX_ROW_PER_TXN	: max number of rows touched per transaction.
-  QUERY_INTVL	: the rate at which database queries come
-  MAX_TXN_PER_PART	: maximum transactions to run per partition.
+  MAX_ROW_PER_TXN	: max number of rows touched per transaction.每个事务触及的最大行数
+  QUERY_INTVL	: the rate at which database queries come 数据库查询速率
+  MAX_TXN_PER_PART	: maximum transactions to run per partition. 每个分区运行的最大事务
 
   // for YCSB Benchmark
-  SYNTH_TABLE_SIZE	: table size
-  ZIPF_THETA	: theta in zipfian distribution (rows accessed follow zipfian distribution)
+  SYNTH_TABLE_SIZE	: table size  表大小
+  ZIPF_THETA	: theta in zipfian distribution (rows accessed follow zipfian distribution)正态分布
   READ_PERC		:
   WRITE_PERC	:
-  SCAN_PERC		: percentage of read/write/scan queries. they should add up to 1.
-  SCAN_LEN		: number of rows touched per scan query.
-  PART_PER_TXN	: number of logical partitions to touch per transaction
-  PERC_MULTI_PART	: percentage of multi-partition transactions
-  REQ_PER_QUERY	: number of queries per transaction
-  FIRST_PART_LOCAL	: with this being true, the first touched partition is always the local partition.
+  SCAN_PERC		: percentage of read/write/scan queries. they should add up to 1. 读写扫描的事务比率
+  SCAN_LEN		: number of rows touched per scan query. 扫描触及的行数
+  PART_PER_TXN	: number of logical partitions to touch per transaction 每个书屋触及的逻辑分区数
+  PERC_MULTI_PART	: percentage of multi-partition transactions 多分区事务的百分比
+  REQ_PER_QUERY	: number of queries per transaction 每个事务的查询次数
+  FIRST_PART_LOCAL	: with this being true, the first touched partition is always the local partition. 第一个触及的是本地分区
 
   // for TPCC Benchmark
-  NUM_WH		: number of warehouses being modeled.
-  PERC_PAYMENT	: percentage of payment transactions.
-  DIST_PER_WH	: number of districts in one warehouse
-  MAX_ITEMS		: number of items modeled.
-  CUST_PER_DIST	: number of customers per district
-  ORD_PER_DIST	: number of orders per district
-  FIRSTNAME_LEN	: length of first name
+  NUM_WH		: number of warehouses being modeled.  建模的仓库数量
+  PERC_PAYMENT	: percentage of payment transactions. 付款事务的百分比
+  DIST_PER_WH	: number of districts in one warehouse 仓库的区域数
+  MAX_ITEMS		: number of items modeled. 建模的商品数量
+  CUST_PER_DIST	: number of customers per district 每个地区的客户数
+  ORD_PER_DIST	: number of orders per district 每个地区的订单数
+  FIRSTNAME_LEN	: length of first name 
   MIDDLE_LEN	: length of middle name
   LASTNAME_LEN	: length of last name
 
