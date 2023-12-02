@@ -293,22 +293,15 @@ RC row_t::get_row(yield_func_t &yield,access_t type, TxnManager *txn, Access *ac
   	INC_STATS(txn->get_thd_id(), trans_cur_row_copy_time, get_sys_clock() - copy_time);
 	goto end;
 #elif CC_ALG == TIMESTAMP || CC_ALG == MVCC || CC_ALG == SSI || CC_ALG == MV_NO_WAIT || CC_ALG == MV_WOUND_WAIT
-	//uint64_t thd_id = txn->get_thd_id();
-// For TIMESTAMP RD, a new copy of the access->data will be returned.
-
-	// for MVCC RD, the version will be returned instead of a copy
-	// So for MVCC RD-WR, the version should be explicitly copied.
-	// row_t * newr = NULL;*/
   uint64_t init_time = get_sys_clock();
 #if CC_ALG == TIMESTAMP
 	DEBUG_M("row_t::get_row TIMESTAMP alloc \n");
 	txn->cur_row = (row_t *) mem_allocator.alloc(row_t::get_row_size(tuple_size));
 	txn->cur_row->init(get_table(), this->get_part_id());
 	assert(txn->cur_row->get_schema() == this->get_schema());
-	INC_STATS(txn->get_thd_id(), trans_cur_row_copy_time, get_sys_clock() - copy_time);
 #elif CC_ALG == MV_NO_WAIT || CC_ALG == MV_WOUND_WAIT
+	INC_STATS(txn->get_thd_id(), trans_cur_row_init_time, get_sys_clock() - init_time);
 	lock_t lt = (type == RD || type == SCAN) ? DLOCK_SH : DLOCK_EX; 
-    INC_STATS(txn->get_thd_id(), trans_cur_row_init_time, get_sys_clock() - init_time);
 	rc = this->manager->access(txn, lt, NULL);
   	uint64_t copy_time = get_sys_clock();
 	if (rc == RCOK) {
@@ -320,7 +313,12 @@ RC row_t::get_row(yield_func_t &yield,access_t type, TxnManager *txn, Access *ac
 		INC_STATS(txn->get_thd_id(), trans_cur_row_copy_time, get_sys_clock() - copy_time);
 		goto end;
 	}
-  	INC_STATS(txn->get_thd_id(), trans_cur_row_copy_time, get_sys_clock() - copy_time);
+	if (rc != Abort) {
+		assert(access->data->get_data() != NULL);
+		assert(access->data->get_table() != NULL);
+		assert(access->data->get_schema() == this->get_schema());
+		assert(access->data->get_table_name() != NULL);
+	}
 #else
 	INC_STATS(txn->get_thd_id(), trans_cur_row_init_time, get_sys_clock() - init_time);
 	uint64_t copy_time = get_sys_clock();
@@ -350,7 +348,6 @@ RC row_t::get_row(yield_func_t &yield,access_t type, TxnManager *txn, Access *ac
 			assert(access->data->get_table_name() != NULL);
 		}
 	}
-	INC_STATS(txn->get_thd_id(), trans_cur_row_copy_time, get_sys_clock() - copy_time);
 #endif
 	//找到了！！！多版本，对于写操作，会创建一个新的行
 	if (rc != Abort && (CC_ALG == MVCC || CC_ALG == SSI || CC_ALG == MV_NO_WAIT || CC_ALG == MV_WOUND_WAIT) && type == WR) {
@@ -360,6 +357,7 @@ RC row_t::get_row(yield_func_t &yield,access_t type, TxnManager *txn, Access *ac
 		newr->copy(access->data);
 		access->data = newr;
 	}
+	INC_STATS(txn->get_thd_id(), trans_cur_row_copy_time, get_sys_clock() - copy_time);
 	goto end;
 #elif CC_ALG == OCC
 	// OCC always make a local copy regardless of read or write
@@ -415,7 +413,7 @@ RC row_t::get_row(access_t type, TxnManager * txn, row_t *& row, uint64_t &orig_
 RC row_t::get_row_post_wait(access_t type, TxnManager * txn, row_t *& row) {
 	RC rc = RCOK;
   uint64_t init_time = get_sys_clock();
-	assert(CC_ALG == WAIT_DIE || CC_ALG == MVCC || CC_ALG == TIMESTAMP || CC_ALG == TIMESTAMP || CC_ALG == WOUND_WAIT || CC_ALG == SSI || CC_ALG == MV_WAIT_DIE || CC_ALG == MV_WOUND_WAIT || CC_ALG == MV_NO_WAIT);
+	assert(CC_ALG == WAIT_DIE || CC_ALG == MVCC || CC_ALG == TIMESTAMP || CC_ALG == WOUND_WAIT || CC_ALG == SSI || CC_ALG == MV_WAIT_DIE || CC_ALG == MV_WOUND_WAIT || CC_ALG == MV_NO_WAIT);
 #if CC_ALG == WAIT_DIE || CC_ALG == WOUND_WAIT
 	assert(txn->lock_ready);
 	rc = RCOK;
@@ -424,6 +422,10 @@ RC row_t::get_row_post_wait(access_t type, TxnManager * txn, row_t *& row) {
 #elif CC_ALG == MV_WOUND_WAIT || CC_ALG == MV_WAIT_DIE || CC_ALG == MV_NO_WAIT
 	assert(txn->lock_ready);
 	row = txn->cur_row;
+	assert(row->get_data() != NULL);
+	assert(row->get_table() != NULL);
+	assert(row->get_schema() == this->get_schema());
+	assert(row->get_table_name() != NULL);
 	if (type == WR) {
 		row_t * newr = (row_t *) mem_allocator.alloc(row_t::get_row_size(tuple_size));
 		newr->init(this->get_table(), get_part_id());
@@ -433,9 +435,7 @@ RC row_t::get_row_post_wait(access_t type, TxnManager * txn, row_t *& row) {
 			row = newr;
 		INC_STATS(txn->get_thd_id(), trans_cur_row_copy_time, get_sys_clock() - copy_time);
 	}
-#endif
-
-#if CC_ALG == MVCC || CC_ALG == TIMESTAMP
+#elif CC_ALG == MVCC || CC_ALG == TIMESTAMP || CC_ALG == SSI
 	assert(txn->ts_ready);
 	//INC_STATS(thd_id, time_wait, t2 - t1);
 	row = txn->cur_row;

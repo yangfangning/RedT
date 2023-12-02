@@ -219,7 +219,9 @@ public:
 	//为了添加依赖
 	ONCONFLICT* creat_on_entry();
     int inconflict;
-    ONCONFLICT * onconflict;
+	//依赖的头是最先来的，每次新加一个新的，就会在在尾部加，清理从头往后遍历
+	ONCONFLICT * onconflicthead;
+	ONCONFLICT * onconflicttail;
 
 
     uint64_t num_msgs_rw;

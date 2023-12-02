@@ -141,6 +141,19 @@ void REDLOG(const char *format, ...);
       ltail = en;                       \
     }                                   \
   }
+#define LIST_PUT_HEAD(lhead, ltail, en) \
+  {                                     \
+	en->next = NULL; \
+	en->prev = NULL; \
+    if (lhead) {                        \
+      en->next = lhead;                 \
+      lhead->prev = en;                 \
+      lhead = en;                       \
+    } else {                            \
+      lhead = en;                       \
+      ltail = en;                       \
+    }                                   \
+  }
 ///在entry前插入新元组
 #define LIST_INSERT_BEFORE(entry, newentry, lhead) \
   {                                                \

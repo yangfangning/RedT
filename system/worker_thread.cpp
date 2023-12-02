@@ -586,9 +586,9 @@ RC WorkerThread::process_rack_log(yield_func_t &yield, Message * msg, uint64_t c
 		if(txn_man->get_return_node() == g_node_id){
       assert(IS_LOCAL(txn_man->get_txn_id()));    
       if(txn_man->get_rsp_cnt() > 0) return WAIT;//如果远程prepare还没回应完，等待
-      rc = txn_man->get_rc();
 
 #if CC_ALG == MV_NO_WAIT || CC_ALG == MV_WOUND_WAIT
+      rc = txn_man->get_rc();
       if (rc == RCOK && txn_man->inconflict > 0){
           txn_man->txn_state = WAIT_PREP_COMT;
           return WAIT;
@@ -608,6 +608,7 @@ RC WorkerThread::process_rack_log(yield_func_t &yield, Message * msg, uint64_t c
 			
 			// INC_STATS(get_thd_id(), trans_prepare_time, prepare_timespan);
       // INC_STATS(get_thd_id(), trans_prepare_count, 1);
+#if CC_ALG == MV_NO_WAIT || CC_ALG == MV_WOUND_WAIT
       if(rc == Abort) {
         txn_man->send_finish_messages();
         txn_man->abort(yield, cor_id);
@@ -616,25 +617,43 @@ RC WorkerThread::process_rack_log(yield_func_t &yield, Message * msg, uint64_t c
         txn_man->send_colog_messages();
         rc = WAIT_REM;
         return rc;
-#else 
-          txn_man->send_finish_messages();
-          txn_man->txn_state = COMMITING;
+#endif
+        txn_man->send_finish_messages();
+        txn_man->txn_state = COMMITING;
 
 #if USE_REPLICA
-          if(txn_man->get_local_log()){
-            txn_man->log_replica(RFIN_LOG, g_node_id); 
-            rc = WAIT_REM;
-            return rc;
-          }else{
-            txn_man->commit(yield, cor_id);
-          }
-#else
-          // if(txn_man->query->partitions_touched.size() != 0)
-            txn_man->commit(yield, cor_id);
-#endif
-#endif
+        if(txn_man->get_local_log()){
+          txn_man->log_replica(RFIN_LOG, g_node_id); 
+          rc = WAIT_REM;
+          return rc;
+        }else{
+          txn_man->commit(yield, cor_id);
         }
-      
+#else
+        // if(txn_man->query->partitions_touched.size() != 0)
+          txn_man->commit(yield, cor_id);
+#endif
+      }
+
+#else
+#if EARLY_PREPARE
+      if(txn_man->get_rc()==Abort) return Abort;
+      // if(txn_man->aborted) return Abort;
+#else
+      assert(txn_man->get_rc()==RCOK);
+#endif
+#if CO_LOG
+      txn_man->send_colog_messages();
+      rc = WAIT_REM;
+      return rc;
+#endif
+      txn_man->send_finish_messages();
+      assert(txn_man->get_local_log());
+      txn_man->log_replica(RFIN_LOG, g_node_id); 
+      rc = WAIT_REM;
+      return rc;
+#endif 
+
     }else{
       DEBUG_T("%d:%d send rack prep to %d\n", g_node_id, txn_man->get_txn_id(), txn_man->get_return_node());
 #if CC_ALG == MV_WOUND_WAIT || CC_ALG == MV_NO_WAIT
@@ -1064,7 +1083,7 @@ RC WorkerThread::process_rack_rfin(Message * msg) {
   txn_man->txn_stats.twopc_time += get_sys_clock() - txn_man->txn_stats.wait_starttime;
 #if USE_TAPIR
   // printf("responses_left %d %d\n", responses_left, txn_man->txn_state);
-  if(txn_man->txn_state != COMMITING) return rc;
+  if(txn_man->txn_state != COMMIT) return rc;
   // if (responses_left == 0) printf("%d recive commit %d message\n",txn_man->get_txn_id(), txn_man->commit_count);
   if(txn_man->get_rc() == RCOK) {
 #if TAPIR_DEBUG

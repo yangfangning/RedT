@@ -42,6 +42,12 @@
 #include "maat.h"
 #include "ssi.h"
 #include "manager.h"
+#include "transport.h"
+#include "routine.h"
+#include "lib.hh"
+#include "qps/op.hh"
+#include "src/sshed.hh"
+#include "global.h"
 
 void TxnStats::init() {
 	starttime=0;
@@ -367,7 +373,8 @@ void TxnManager::reset() {
 	twopl_wait_start = 0;
 
     inconflict = 0;
-    onconflict = NULL;
+	onconflicthead = NULL;
+	onconflicttail = NULL;
 
     num_msgs_rw = 0;
 	num_msgs_prep = 0;
@@ -650,14 +657,14 @@ RC TxnManager::start_commit(yield_func_t &yield, uint64_t cor_id) {
 			send_colog_messages();
 			rc = WAIT_REM;
 			return rc;
-#else
+#endif
 			send_finish_messages();
 			txn_state = COMMITING;
 		#if !USE_TAPIR
 			// rsp_cnt = 0;
 		#endif
 			rc = commit(yield, cor_id);
-#endif
+
 		}
 	} 
 	else { // is not multi-part ,实验时直接不设这种类型

@@ -74,8 +74,9 @@ private:
   Mv2plhisEntry * retire_head;
   Mv2plhisEntry * retire_tail;
   UInt32 waiter_cnt;
-  //行上最大提交时间戳
-  ts_t max_retire_cts;
+ 
+  ts_t max_retire_cts;//最大的退休时间，有可能变小，因为可能回滚导致退休的事务回滚
+  ts_t max_cts; //行上最大提交时间戳
   //历史数据的指针,历史数据只有一个时，头和尾指向一个，头是最早的数据，尾是最新的数据
   Mv2plhisEntry * writehis;
 	Mv2plhisEntry * writehistail;
