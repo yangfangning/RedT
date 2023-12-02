@@ -84,8 +84,8 @@
 // Simulation + Hardware
 /***********************************************/
 #define CENTER_CNT 4
-#define NODE_CNT 8
-#define THREAD_CNT 40
+#define NODE_CNT 3
+#define THREAD_CNT 1
 #define REM_THREAD_CNT 1
 #define SEND_THREAD_CNT 1
 #define COROUTINE_CNT 4
@@ -93,7 +93,7 @@
 // PART_CNT should be at least NODE_CNT
 #define PART_CNT NODE_CNT
 #define CLIENT_NODE_CNT 1
-#define CLIENT_THREAD_CNT 4
+#define CLIENT_THREAD_CNT 1
 #define CLIENT_REM_THREAD_CNT 1
 #define CLIENT_SEND_THREAD_CNT 1
 #define CLIENT_RUNTIME false
@@ -119,15 +119,14 @@
 // # of transactions to run for warmup
 #define WARMUP            0
 // YCSB or TPCC or PPS or DA
-#define WORKLOAD YCSB
+#define WORKLOAD TPCC
 // print the transaction latency distribution
 #define PRT_LAT_DISTR false
 #define STATS_ENABLE        true
 #define TIME_ENABLE         true //STATS_ENABLE
 
 #define FIN_BY_TIME true
-//每个服务器上运行的最大事务数量
-#define MAX_TXN_IN_FLIGHT 100
+#define MAX_TXN_IN_FLIGHT 320
 
 #define SERVER_GENERATE_QUERIES false
 
@@ -314,11 +313,11 @@
 // Benchmark
 /***********************************************/
 // max number of rows touched per transaction
-#define MAX_ROW_PER_TXN       64
+#define MAX_ROW_PER_TXN       32
 #define QUERY_INTVL         1UL
 #define MAX_TXN_PER_PART 10000
 #define FIRST_PART_LOCAL      true
-#define MAX_TUPLE_SIZE        1024 // in bytes
+#define MAX_TUPLE_SIZE        64 // in bytes
 #define GEN_BY_MPR false
 // ==== [YCSB] ====
 // SKEW_METHOD:
@@ -343,11 +342,11 @@
 #define STRICT_PPT 1
 //only consider the primary replica here,
 //try keep part_per_txn=2 when use CROSS_DC_TXN_PERC
-#define CROSS_DC_TXN_PERC 1.0
+#define CROSS_DC_TXN_PERC 0
 // ==== [TPCC] ====
 // For large warehouse count, the tables do not fit in memory
 // small tpcc schemas shrink the table size.
-#define TPCC_SMALL          false
+#define TPCC_SMALL          true
 #define MAX_ITEMS_SMALL 10000
 #define CUST_PER_DIST_SMALL 2000
 #define MAX_ITEMS_NORM 100000
@@ -393,7 +392,7 @@ enum DATxnType {
 #define MAX_DA_TABLE_SIZE 10000
 extern TPCCTxnType g_tpcc_txn_type;
 //#define TXN_TYPE          TPCC_ALL
-#define PERC_PAYMENT 0.0
+#define PERC_PAYMENT 1.0//全是new_order，0为全是payment
 #define FIRSTNAME_MINLEN      8
 #define FIRSTNAME_LEN         16
 #define LASTNAME_LEN        16
@@ -590,8 +589,8 @@ enum PPSTxnType {
 #define PROG_TIMER 10 * BILLION // in s
 #define BATCH_TIMER 0
 #define SEQ_BATCH_TIMER 5 * 1 * MILLION // ~5ms -- same as CALVIN paper
-#define DONE_TIMER 1 * 60 * BILLION // ~1 minutes
-#define WARMUP_TIMER 1 * 10 * BILLION // ~1 minutes
+#define DONE_TIMER 1 * 30 * BILLION // ~1 minutes
+#define WARMUP_TIMER 1 * 30 * BILLION // ~1 minutes
 
 #define SEED 0
 #define SHMEM_ENV false
