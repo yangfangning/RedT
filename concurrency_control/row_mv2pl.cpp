@@ -109,7 +109,7 @@ RC Row_mv2pl::access(TxnManager * txn, lock_t type, row_t * row) {
             //有上锁事务，
             if (whis == NULL || whis->ts < start_ts){//可能能读到未提交的数据
                 //当本地时间戳没确定时直接跳过，说明处于运行状态，当确定后还小于开始时间戳，等待，本地提交时间戳大于开始时间戳的话说明读不到新建的版本，跳过，对于终止的事务，终止时是状态先确定还是
-                if(owner->txn->get_prepare_timestamp() < start_ts){
+                if(owner->txn->get_prepare_timestamp() <= start_ts){
                     Mv2plEntry * entry = create_2pl_entry();
                     entry->start_ts = get_sys_clock();
                     entry->txn = txn;
@@ -137,7 +137,8 @@ RC Row_mv2pl::access(TxnManager * txn, lock_t type, row_t * row) {
             //读的数据不为空,且没提交增加依赖
             //前驱事务加依赖
             ONCONFLICT * entry = whis->txn->creat_on_entry();
-            entry->txn = txn;
+            entry->txn = &txn;
+            entry->txn_1 = txn;
             entry->next = NULL;
             if(whis->txn->onconflicthead){
               whis->txn->onconflicttail->next = entry;
@@ -270,12 +271,13 @@ RC Row_mv2pl::access(TxnManager * txn, lock_t type, row_t * row) {
                 row_t * ret = (writehistail == NULL) ? _row : writehistail->row;
                 txn->cur_row = ret;
 #if CLV == CLV2 || CLV == CLV3
-                Mv2plhisEntry *whis = writehistail;
+                Mv2plhisEntry * whis = writehistail;
                 if( whis && !whis->commited){
                     //读的数据不为空,且没提交增加依赖
                     //前驱事务加依赖
                     ONCONFLICT * entry = whis->txn->creat_on_entry();
-                    entry->txn = txn;
+                    entry->txn = &txn;
+                    entry->txn_1 = txn;
                     entry->next = NULL;
                     if(whis->txn->onconflicthead){
                         whis->txn->onconflicttail->next = entry;
@@ -322,14 +324,22 @@ void Row_mv2pl::lock_release(TxnManager * txn, lock_t type){
 #if CLV == CLV2 || CLV == CLV3
         //清空这个事务的依赖列表，这个都要做，所以到开头去
         txn->inconflict = -1;
-        ONCONFLICT *oncof = txn->onconflicthead;//这里不需要让其变为空，后续清理事务管理器时会自动设置
-        ONCONFLICT *oncof2;
+        ONCONFLICT * oncof = txn->onconflicthead;//这里不需要让其变为空，后续清理事务管理器时会自动设置
+        ONCONFLICT * oncof2;
         while(oncof!=NULL){
-            oncof->txn->inconflict = -1;
-            oncof->txn->set_rc(Abort);
-            //唤醒回应
-            if(oncof->txn->txn_state == WAIT_PREP_COMT){
-                txn_table.restart_prep(txn->get_thd_id(), oncof->txn->get_txn_id(), oncof->txn->get_batch_id());//唤醒事务，等待者上位，重新执行事务，
+          if((*(oncof->txn)) != oncof->txn_1){
+            oncof2 = oncof;
+            oncof = oncof->next;
+            mem_allocator.free(oncof2, sizeof(ONCONFLICT));
+            continue;
+          }
+          (*(oncof->txn))->inconflict = -1;
+          (*(oncof->txn))->set_rc(Abort);
+          // 唤醒回应
+          if ((*(oncof->txn))->txn_state == WAIT_PREP_COMT) {
+            txn_table.restart_prep(
+                txn->get_thd_id(), (*(oncof->txn))->get_txn_id(),
+                (*(oncof->txn))->get_batch_id());  // 唤醒事务，等待者上位，重新执行事务，
             }
             oncof2 = oncof;
             oncof = oncof->next;
@@ -338,7 +348,7 @@ void Row_mv2pl::lock_release(TxnManager * txn, lock_t type){
         //判断回滚的事务是否是拥有者，是的话不用清理历史了，否则要清理历史
         //不是拥有者
         if (owner == NULL || txn->get_txn_id() != owner->txn->get_txn_id()){
-            Mv2plhisEntry *entry = writehistail;
+            Mv2plhisEntry * entry = writehistail;
             //找到要清理的版本，要清理的版本，要满足事务id能对上
             while (entry != NULL && entry->txn->get_txn_id() != txn->get_txn_id() && !entry->commited) {
                 //说明这个事务在这行上写的历史已经被清理，不需要进行其他操作了，也不需要唤醒等待者
@@ -354,7 +364,7 @@ void Row_mv2pl::lock_release(TxnManager * txn, lock_t type){
                 }else{
                   writehistail = entry->next;
                 }
-                Mv2plhisEntry *prev;
+                Mv2plhisEntry * prev;
                 while(entry->prev != NULL){
                   prev = entry;
                   entry = entry->prev;
@@ -426,12 +436,18 @@ void Row_mv2pl::lock_release(TxnManager * txn, lock_t type){
     }else{//如果是提交操作，说明已经退休过了，只需要解除依赖就可以了
     //能进入提交流程，说明事务的inconflict一定为0，接下来要做的就是让其依赖解除，行上的标志变为提交
 #if CLV == CLV2 || CLV == CLV3
-        ONCONFLICT *oncof = txn->onconflicthead;//这里不需要让其变为空，后续清理事务管理器时会自动设置
-        ONCONFLICT *oncof2;
+        ONCONFLICT * oncof = txn->onconflicthead;//这里不需要让其变为空，后续清理事务管理器时会自动设置
+        ONCONFLICT * oncof2;
         while(oncof!=NULL){
-            oncof->txn->inconflict--;
-            if(oncof->txn->inconflict == 0 && oncof->txn->txn_state == WAIT_PREP_COMT){
-                txn_table.restart_prep(txn->get_thd_id(), oncof->txn->get_txn_id(), oncof->txn->get_batch_id());//唤醒事务，等待者上位，重新执行事务，
+            if((*(oncof->txn)) != oncof->txn_1){
+                oncof2 = oncof;
+                oncof = oncof->next;
+                mem_allocator.free(oncof2, sizeof(ONCONFLICT));
+                continue;
+            }
+            (*(oncof->txn))->inconflict--;
+            if((*(oncof->txn))->inconflict == 0 && (*(oncof->txn))->txn_state == WAIT_PREP_COMT){
+                txn_table.restart_prep(txn->get_thd_id(), (*(oncof->txn))->get_txn_id(), (*(oncof->txn))->get_batch_id());//唤醒事务，等待者上位，重新执行事务，
             }
             oncof2 = oncof;
             oncof = oncof->next;
@@ -442,7 +458,7 @@ void Row_mv2pl::lock_release(TxnManager * txn, lock_t type){
         retire_head = retire_head->prev;
 #endif
         max_cts = txn->get_commit_timestamp();
-        clear_history(txn);
+        //clear_history(txn);
 
     }
     

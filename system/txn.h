@@ -128,8 +128,9 @@ public:
 	double lat_other_time_start;
 };
 struct ONCONFLICT {
-  TxnManager *txn;
-  ONCONFLICT *next;
+  TxnManager **txn;
+  TxnManager * txn_1;
+  ONCONFLICT * next;
 };
 
 /*

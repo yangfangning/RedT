@@ -83,9 +83,9 @@ private:
   uint64_t whis_len;//记录有多少个历史数据，不包括最初的一个
 
   // 创建新的版本和释放历史版本，会被上面的clear_history调用
-  Mv2plhisEntry* creat_new_hisentry();
-  void release_2pl_hisentry(Mv2plhisEntry* entry);
-  void release_2pl_hisentry2(Mv2plhisEntry* entry);
+  Mv2plhisEntry * creat_new_hisentry();
+  void release_2pl_hisentry(Mv2plhisEntry * entry);
+  void release_2pl_hisentry2(Mv2plhisEntry * entry);
   // 获取事务元组和释放事务元组
 	Mv2plEntry* create_2pl_entry();
 	void release_2pl_entry(Mv2plEntry * entry);

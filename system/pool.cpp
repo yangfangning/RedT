@@ -52,7 +52,7 @@ void TxnManPool::init(Workload * wl, uint64_t size) {
     }
   }
 }
-
+//事务出栈
 void TxnManPool::get(uint64_t thd_id, TxnManager *& item) {
 #if CC_ALG == CALVIN
   bool r = pool->pop(item);
@@ -64,7 +64,7 @@ void TxnManPool::get(uint64_t thd_id, TxnManager *& item) {
   }
   item->init(thd_id,_wl);
 }
-
+//进栈
 void TxnManPool::put(uint64_t thd_id, TxnManager * item) {
   item->release();
   // item->reset();
