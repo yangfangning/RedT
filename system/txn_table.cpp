@@ -130,7 +130,7 @@ TxnManager * TxnTable::get_transaction_manager(uint64_t thd_id, uint64_t txn_id,
   INC_STATS(thd_id,mtx[24],get_sys_clock()-prof_starttime);
   }
 //更新线程池的最小时间戳？
-#if CC_ALG == MVCC || CC_ALG == WOOKONG || CC_ALG == DTA || CC_ALG == DLI_DTA || CC_ALG == DLI_DTA2 || CC_ALG == DLI_DTA3
+#if CC_ALG == MVCC || CC_ALG == WOOKONG || CC_ALG == DTA || CC_ALG == DLI_DTA || CC_ALG == DLI_DTA2 || CC_ALG == DLI_DTA3 || CC_ALG == MV_NO_WAIT || CC_ALG == MV_WOUND_WAIT
   if(txn_man->get_timestamp() < pool[pool_id]->min_ts)
     pool[pool_id]->min_ts = txn_man->get_timestamp();
 #endif
@@ -205,7 +205,7 @@ void TxnTable::release_transaction_manager(uint64_t thd_id, uint64_t txn_id, uin
 
   txn_node_t t_node = pool[pool_id]->head;
 
-#if CC_ALG == MVCC || CC_ALG == WOOKONG || CC_ALG == DTA || CC_ALG == DLI_DTA || CC_ALG == DLI_DTA2 || CC_ALG == DLI_DTA3
+#if CC_ALG == MVCC || CC_ALG == WOOKONG || CC_ALG == DTA || CC_ALG == DLI_DTA || CC_ALG == DLI_DTA2 || CC_ALG == DLI_DTA3 || CC_ALG == MV_NO_WAIT || CC_ALG == MV_WOUND_WAIT
   uint64_t min_ts = UINT64_MAX;
   txn_node_t saved_t_node = NULL;
 #endif
@@ -215,7 +215,7 @@ void TxnTable::release_transaction_manager(uint64_t thd_id, uint64_t txn_id, uin
     if(is_matching_txn_node(t_node,txn_id,batch_id)) {
       LIST_REMOVE_HT(t_node,pool[txn_id % pool_size]->head,pool[txn_id % pool_size]->tail);
       --pool[pool_id]->cnt;
-#if CC_ALG == MVCC || CC_ALG == WOOKONG || CC_ALG == DTA || CC_ALG == DLI_DTA || CC_ALG == DLI_DTA2 || CC_ALG == DLI_DTA3
+#if CC_ALG == MVCC || CC_ALG == WOOKONG || CC_ALG == DTA || CC_ALG == DLI_DTA || CC_ALG == DLI_DTA2 || CC_ALG == DLI_DTA3 || CC_ALG == MV_NO_WAIT || CC_ALG == MV_WOUND_WAIT
     saved_t_node = t_node;
     t_node = t_node->next;
     continue;
@@ -223,7 +223,7 @@ void TxnTable::release_transaction_manager(uint64_t thd_id, uint64_t txn_id, uin
       break;
 #endif
     }
-#if CC_ALG == MVCC || CC_ALG == WOOKONG || CC_ALG == DTA || CC_ALG == DLI_DTA || CC_ALG == DLI_DTA2 || CC_ALG == DLI_DTA3
+#if CC_ALG == MVCC || CC_ALG == WOOKONG || CC_ALG == DTA || CC_ALG == DLI_DTA || CC_ALG == DLI_DTA2 || CC_ALG == DLI_DTA3 || CC_ALG == MV_NO_WAIT || CC_ALG == MV_WOUND_WAIT
     if (t_node->txn_man->get_timestamp() < min_ts) min_ts = t_node->txn_man->get_timestamp();
 #endif
     t_node = t_node->next;
@@ -231,7 +231,7 @@ void TxnTable::release_transaction_manager(uint64_t thd_id, uint64_t txn_id, uin
   INC_STATS(thd_id,mtx[25],get_sys_clock()-prof_starttime);
   prof_starttime = get_sys_clock();
 
-#if CC_ALG == MVCC || CC_ALG == WOOKONG || CC_ALG == DTA || CC_ALG == DLI_DTA || CC_ALG == DLI_DTA2 || CC_ALG == DLI_DTA3
+#if CC_ALG == MVCC || CC_ALG == WOOKONG || CC_ALG == DTA || CC_ALG == DLI_DTA || CC_ALG == DLI_DTA2 || CC_ALG == DLI_DTA3 || CC_ALG == MV_NO_WAIT || CC_ALG == MV_WOUND_WAIT
   t_node = saved_t_node;
   pool[pool_id]->min_ts = min_ts;
 #endif

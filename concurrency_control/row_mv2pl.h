@@ -72,7 +72,6 @@ private:
   Mv2plEntry * owner;
   // 退休者的头是最老的数据，尾是最新的数据
   Mv2plhisEntry * retire_head;
-  Mv2plhisEntry * retire_tail;
   UInt32 waiter_cnt;
  
   ts_t max_retire_cts;//最大的退休时间，有可能变小，因为可能回滚导致退休的事务回滚

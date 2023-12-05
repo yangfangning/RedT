@@ -459,7 +459,11 @@ RC row_t::get_row_post_wait(access_t type, TxnManager * txn, row_t *& row) {
 	return rc;
 }
 #if CC_ALG == MV_NO_WAIT || CC_ALG == MV_WOUND_WAIT
-void row_t::retire(TxnManager *txn, row_t *row) { this->manager->retire(txn, row); }
+void row_t::retire(TxnManager *txn, row_t *row) { 
+	assert (row != NULL);
+	assert (row->get_schema() == this->get_schema());
+	this->manager->retire(txn, row); 
+}
 #else
 void row_t::retire(TxnManager *txn, row_t *row) {}
 #endif

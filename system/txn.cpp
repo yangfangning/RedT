@@ -354,13 +354,16 @@ void TxnManager::init(uint64_t thd_id, Workload * h_wl) {
 	num_msgs_prep = 0;
 	num_msgs_commit = 0;
 	finish_read_write = false;
-	set_local_log(false);
+    finish_retire = false;
+    set_local_log(false);
 }
 
 // reset after abort
 void TxnManager::reset() {
 	lock_ready = false;
-	lock_ready_cnt = 0;
+	prep_ready = true;
+    need_prep_cont = false;
+    lock_ready_cnt = 0;
 	locking_done = true;
 	ready_part = 0;
 	rsp_cnt = 0;
@@ -380,7 +383,8 @@ void TxnManager::reset() {
 	num_msgs_prep = 0;
 	num_msgs_commit = 0;
 	finish_read_write = false;
-	set_local_log(false);
+    finish_retire = false;
+    set_local_log(false);
 
 #if USE_TAPIR
 	for(int i = 0; i < g_node_cnt; i++) {
@@ -627,6 +631,14 @@ RC TxnManager::start_commit(yield_func_t &yield, uint64_t cor_id) {
 	if(rsp_cnt != 0 || log_rsp_cnt!=0){
 		return WAIT_REM;
 	}
+
+#if CC_ALG == MV_NO_WAIT || CC_ALG == MV_WOUND_WAIT
+	if (ATOM_CAS(txn_man->prep_ready,false,false)){
+		assert(txn_man->txn_state == PREPARE);
+		ATOM_CAS(txn_man->need_prep_cont,false,true);
+		return WAIT_REM;
+	}
+#endif
 #else
 	// printf("%d query_partitions_modified size: %d\n", get_txn_id(), query->partitions_modified.size());
 	if(query->partitions_touched.size() != 0)
@@ -683,9 +695,9 @@ RC TxnManager::start_commit(yield_func_t &yield, uint64_t cor_id) {
 		if(CC_ALG == SSI) {
             ssi_man.gene_finish_ts(this);
         }
-		if (CC_ALG == MV_NO_WAIT || CC_ALG == MV_WOUND_WAIT){
-            this->set_commit_timestamp(this->get_start_timestamp());
-        }
+		// if (CC_ALG == MV_NO_WAIT || CC_ALG == MV_WOUND_WAIT){
+        //     this->set_commit_timestamp(this->get_start_timestamp());
+        // }
 		if(rc == RCOK){ 
 			// printf("commit transaction\n");
 			// if(IS_LOCAL(get_txn_id())) {
@@ -718,7 +730,7 @@ RC TxnManager::start_commit(yield_func_t &yield, uint64_t cor_id) {
 }
 #endif
 void TxnManager::send_prepare_messages() {
-#if USE_REPLICA
+#if USE_REPLICA && CC_ALG != MV_NO_WAIT && CC_ALG != MV_WOUND_WAIT
 #if USE_TAPIR
 	uint64_t tar_nodes[g_node_cnt];
 	uint64_t tar_nodes_cnt = 0;
@@ -813,12 +825,17 @@ void TxnManager::send_prepare_messages() {
 		// printf("%d:%d send prepare to %d\n", g_node_id, get_txn_id(), tar_nodes[i]);
 		msg_queue.enqueue(get_thd_id(), Message::create_message(this, RPREPARE),tar_nodes[i]);
 	}
-#if CLV == CLV3
-	pre_prepare_cnt = rsp_cnt;
-#endif
 #endif
 #else
+#if CC_ALG == MV_NO_WAIT || CC_ALG == MV_WOUND_WAIT
+	rsp_cnt = 0;
+	fin_rsp_cnt = 0;
+	log_rsp_cnt = 0;
+	log_fin_rsp_cnt = 0;
+	pre_prepare_cnt = query->partitions_touched.size() - 1;
+#endif
 	rsp_cnt = query->partitions_touched.size() - 1;
+
 	DEBUG("%ld Send PREPARE messages to %d\n",get_txn_id(),rsp_cnt);
 	for(uint64_t i = 0; i < query->partitions_touched.size(); i++) {
 	if(GET_NODE_ID(query->partitions_touched[i]) == g_node_id) continue;
@@ -829,6 +846,9 @@ void TxnManager::send_prepare_messages() {
 }
 
 void TxnManager::send_colog_messages() {
+#if CLV != CLV3 && (CC_ALG == MV_NO_WAIT || CC_ALG == MV_WOUND_WAIT)
+	txn_man->set_commit_timestamp(txn_man->max_prepare_timestamp);
+#endif
 	rsp_cnt = 2;
 	uint64_t next_node = g_node_id;
 	for(uint64_t i = 1; i <= 2; i++) {
@@ -1122,9 +1142,11 @@ int TxnManager::received_log_fin_response(RC rc) {
 	  --log_fin_rsp_cnt;
 	return log_fin_rsp_cnt;
 }
-
+#if CLV == CLV3
 bool TxnManager::waiting_for_response() { return (rsp_cnt > 0 || fin_rsp_cnt > 0 || log_rsp_cnt > 0 || log_fin_rsp_cnt > 0); }
-
+#else
+bool TxnManager::waiting_for_response() { return (rsp_cnt > 0 || fin_rsp_cnt > 0 || log_rsp_cnt > 0 || log_fin_rsp_cnt > 0 || pre_prepare_cnt > 0); }
+#endif
 bool TxnManager::is_multi_part() {
 	return query->partitions_touched.size() > 1;
 	//return query->partitions.size() > 1;
@@ -1226,12 +1248,29 @@ uint64_t TxnManager::incr_lr() {
 	sem_post(&rsp_mutex);
 	return result;
 }
-//功能未知，可能是用来判断是否需要唤醒事务的函数
+
 uint64_t TxnManager::decr_lr() {
 	//ATOM_SUB(this->rsp_cnt,i);
 	uint64_t result;
 	sem_wait(&rsp_mutex);
 	result = --this->lock_ready_cnt;
+	sem_post(&rsp_mutex);
+	return result;
+}
+
+uint64_t TxnManager::incr_pr() {
+	//ATOM_ADD(this->rsp_cnt,i);
+	uint64_t result;
+	sem_wait(&rsp_mutex);
+	result = ++this->inconflict;
+	sem_post(&rsp_mutex);
+	return result;
+}
+uint64_t TxnManager::decr_pr() {
+	//ATOM_SUB(this->rsp_cnt,i);
+	uint64_t result;
+	sem_wait(&rsp_mutex);
+	result = --this->inconflict;
 	sem_post(&rsp_mutex);
 	return result;
 }

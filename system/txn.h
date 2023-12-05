@@ -182,6 +182,8 @@ public:
 	uint64_t        decr_rsp(int i);
 	uint64_t        incr_lr();
 	uint64_t        decr_lr();
+	uint64_t        incr_pr();
+	uint64_t        decr_pr();
 
 	RC commit(yield_func_t &yield, uint64_t cor_id);
 	RC start_commit(yield_func_t &yield, uint64_t cor_id);
@@ -212,6 +214,9 @@ public:
 	row_t * volatile cur_row;
 	// [DL_DETECT, NO_WAIT, WAIT_DIE]
 	int volatile   lock_ready;
+	//MV_NO_WAIT,MV_WOUND_WAIT为了标识事务是否可以返回prepare消息
+	int volatile   prep_ready;
+	int volatile   need_prep_cont;
 	// [TIMESTAMP, MVCC]
 	bool volatile   ts_ready;
 	// [HSTORE, HSTORE_SPEC]
@@ -326,7 +331,9 @@ public:
 	bool unset_ready() {return ATOM_CAS(txn_ready,1,0);}
 	bool is_ready() {return txn_ready == true;}
 	volatile int txn_ready;
-	volatile bool finish_read_write;
+	volatile bool finish_read_write;//只有远程才用
+	//为了退休
+	volatile bool finish_retire;
 
 	// Calvin
 	uint32_t lock_ready_cnt;
