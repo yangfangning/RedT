@@ -633,9 +633,9 @@ RC TxnManager::start_commit(yield_func_t &yield, uint64_t cor_id) {
 	}
 
 #if CC_ALG == MV_NO_WAIT || CC_ALG == MV_WOUND_WAIT
-	if (ATOM_CAS(txn_man->prep_ready,false,false)){
-		assert(txn_man->txn_state == PREPARE);
-		ATOM_CAS(txn_man->need_prep_cont,false,true);
+	if (ATOM_CAS(this->prep_ready,false,false)){
+		assert(this->txn_state == PREPARE);
+		ATOM_CAS(this->need_prep_cont,false,true);
 		return WAIT_REM;
 	}
 #endif
@@ -847,7 +847,7 @@ void TxnManager::send_prepare_messages() {
 
 void TxnManager::send_colog_messages() {
 #if CLV != CLV3 && (CC_ALG == MV_NO_WAIT || CC_ALG == MV_WOUND_WAIT)
-	txn_man->set_commit_timestamp(txn_man->max_prepare_timestamp);
+	this->set_commit_timestamp(this->max_prepare_timestamp);
 #endif
 	rsp_cnt = 2;
 	uint64_t next_node = g_node_id;
