@@ -486,9 +486,9 @@ RC WorkerThread::run(yield_func_t &yield, uint64_t cor_id) {
 RC WorkerThread::process_set_co_ts(yield_func_t &yield, Message * msg, uint64_t cor_id) {
 #if CLV == CLV3
   txn_man->set_commit_timestamp(((FinishMessage*)msg)->commit_timestamp);
-  assert(((FinishMessage*)msg)->rc == RCOK);
   if(txn_man->get_rc() == RCOK){
     txn_man->retire(yield, cor_id);
+    txn_man->finish_retire = true;
   }
 #endif
   return RCOK;
@@ -778,6 +778,7 @@ RC WorkerThread::process_rack_fin_log(yield_func_t &yield, Message * msg, uint64
   	  // printf("xxx txn %lu send rack_fin, rc = %d\n", txn_man->get_txn_id(), txn_man->get_rc());
       if(txn_rc == RCOK){
         txn_man->commit(yield, cor_id);
+        assert(txn_man->finish_retire == true);
       }else{
         txn_man->abort(yield, cor_id);
         txn_man->reset();
@@ -811,6 +812,7 @@ RC WorkerThread::process_rack_pre_prep(yield_func_t &yield, Message * msg, uint6
     txn_man->set_commit_timestamp(txn_man->max_prepare_timestamp);
     txn_man->send_co_ts_messages();
     txn_man->retire(yield, cor_id);
+    txn_man->finish_retire = true;
   } 
   return rc;
 }
@@ -1013,6 +1015,7 @@ assert(responses_left >= 0);
       return rc;
     }else{
       txn_man->commit(yield, cor_id);
+      assert(txn_man->finish_retire == true);
     }
 #else
     // if(txn_man->query->partitions_touched.size() != 0)
@@ -1029,7 +1032,6 @@ RC WorkerThread::process_rack_co_log(yield_func_t &yield, Message * msg, uint64_
   int responses_left = 0;
 
   responses_left = txn_man->received_response(((AckMessage*)msg)->rc);
-  assert(((AckMessage*)msg)->rc == true);
 
   assert(responses_left >= 0);
 
@@ -1051,6 +1053,7 @@ RC WorkerThread::process_rack_co_log(yield_func_t &yield, Message * msg, uint64_
       return rc;
     }else{
       txn_man->commit(yield, cor_id);
+      assert(txn_man->finish_retire == true);
     }
 #else
     // if(txn_man->query->partitions_touched.size() != 0)

@@ -413,7 +413,7 @@ void Row_mv2pl::lock_release(TxnManager * txn, lock_t type){
             }
             //此时的事务要么是有依赖的事务，要么要回滚，但是还没有开始执行
             assert(oncof->txn_1->inconflict != 0);
-            if (oncof->txn_1->decr_pr == 0){
+            if (oncof->txn_1->decr_pr() == 0){
               assert(ATOM_CAS(oncof->txn_1->prep_ready, false, true));
               if (ATOM_CAS(oncof->txn_1->need_prep_cont,true,false)) {
                     txn_table.restart_prep(

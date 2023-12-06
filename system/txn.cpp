@@ -480,6 +480,9 @@ RC TxnManager::commit(yield_func_t &yield, uint64_t cor_id) {
 	DEBUG("Commit %ld\n",get_txn_id());
 
 	release_locks(yield, RCOK, cor_id);
+#if CLV == CLV1
+    this->finish_retire = true;
+#endif
 #if CC_ALG == MAAT
 	time_table.release(get_thd_id(),get_txn_id());
 #endif
