@@ -38,15 +38,6 @@ struct Mv2plhisEntry {
   Mv2plhisEntry * prev;
   bool commited = false;
 };
-//这个待定，与上面冲突了有点
-struct Mv2plLockEntry {
-    lock_t type;
-    ts_t   start_ts;
-    // TxnManager * txn;
-    txnid_t txn;
-    Mv2plLockEntry * next;
-    Mv2plLockEntry * prev;
-};
 
 class Row_mv2pl {
 public:

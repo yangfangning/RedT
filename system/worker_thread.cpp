@@ -370,7 +370,8 @@ RC WorkerThread::run(yield_func_t &yield, uint64_t cor_id) {
     DEBUG_T("worker run txn %ld type %d \n", msg->get_txn_id(),msg->get_rtype());
     if((msg->rtype != CL_QRY && msg->rtype != CL_QRY_O && msg->rtype != RLOG && msg->rtype != RFIN_LOG) || CC_ALG == CALVIN) {
       txn_man = get_transaction_manager(msg);//获取事务的管理器，没有就建一个
-      if(msg->rtype == RACK_LOG || msg->rtype == RACK_FIN_LOG || msg->rtype == RACK_FIN || msg->rtype == RACK_PREP || msg->rtype == RACK_PREP_CONT
+      if(msg->rtype == RACK_LOG || msg->rtype == RACK_FIN_LOG || msg->rtype == RACK_FIN || msg->rtype == RACK_PREP || msg->rtype == RACK_PREP_CONT || msg->rtype == SET_CO_TS || 
+      msg->rtype == RACK_PRE_PREP
       //  || msg->rtype == RPREPARE
        ){ 
         // printf("txn %ld type %d check already commit\n", msg->get_txn_id(),msg->get_rtype());
@@ -380,11 +381,11 @@ RC WorkerThread::run(yield_func_t &yield, uint64_t cor_id) {
           DEBUG_T("txn %ld type %d already commit, query?%d, partitions_touched?%d, abort cnt %d, msg abort cnt %d\n", msg->get_txn_id(),msg->get_rtype(), !txn_man->query, txn_man->query->partitions_touched.size() == 0 , txn_man->abort_cnt, msg->current_abort_cnt);
           continue;
         }
-        else if (txn_man->txn_state == COMMITING && msg->rtype == RACK_PREP || msg->rtype == RACK_PREP_CONT) {
+        else if (txn_man->txn_state == COMMITING && (msg->rtype == RACK_PREP || msg->rtype == RACK_PREP_CONT || msg->rtype == RACK_PRE_PREP)) {
           DEBUG_T("txn %ld type %d state %ld\n", msg->get_txn_id(),msg->get_rtype(), txn_man->txn_state);
           continue;
         }
-        else if (txn_man->txn_state == COMMIT && msg->rtype == RACK_FIN) {
+        else if (txn_man->txn_state == COMMIT && (msg->rtype == RACK_FIN || msg->rtype == SET_CO_TS)) {
           DEBUG_T("txn %ld type %d state %ld\n", msg->get_txn_id(),msg->get_rtype(), txn_man->txn_state);
           continue;
         }
@@ -499,7 +500,7 @@ RC WorkerThread::process_rfin(yield_func_t &yield, Message * msg, uint64_t cor_i
   assert(CC_ALG != CALVIN);
   M_ASSERT_V(!IS_LOCAL(msg->get_txn_id()), "RFIN local: %ld %ld/%d\n", msg->get_txn_id(),
              msg->get_txn_id() % g_node_cnt, g_node_id);
-#if CC_ALG == MAAT || ((CC_ALG == MV_WOUND_WAIT || CC_ALG == MV_NO_WAIT)&&CLV != CLV3 )
+#if CC_ALG == MAAT || CC_ALG == MV_WOUND_WAIT || CC_ALG == MV_NO_WAIT
   txn_man->set_commit_timestamp(((FinishMessage*)msg)->commit_timestamp);
 #endif
 #if (CC_ALG == MV_WOUND_WAIT || CC_ALG == MV_NO_WAIT) && CLV == CLV3
