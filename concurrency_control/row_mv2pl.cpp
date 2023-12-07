@@ -157,6 +157,11 @@ RC Row_mv2pl::access(TxnManager * txn, lock_t type, row_t * row) {
         //最大提交时间戳在提交时确定，可见但未提交的不能算，因为有回滚的可能
         if( start_ts < max_retire_cts){
             rc = Abort;
+#if CLV == CLV2 || CLV == CLV3 
+            ATOM_CAS(txn->prep_ready, false, true);
+            ATOM_CAS(txn->need_prep_cont, true, false);
+            ATOM_CAS(txn->inconflict,txn->inconflict,-1);
+#endif
             goto final;
         }
         if (conflict){
@@ -171,6 +176,11 @@ RC Row_mv2pl::access(TxnManager * txn, lock_t type, row_t * row) {
             if (!canwound || owner->txn->txn_state == WOUNDED || ATOM_CAS(owner->txn->txn_state, RUNNING, WOUNDED)){
                 if (canwound){
                   owner->txn->set_rc(Abort);
+#if CLV == CLV2 || CLV == CLV3 
+            ATOM_CAS(owner->txn->prep_ready, false, true);
+            ATOM_CAS(owner->txn->need_prep_cont, true, false);
+            ATOM_CAS(owner->txn->inconflict,owner->txn->inconflict,-1);
+#endif
                 }
                 Mv2plEntry * entry = create_2pl_entry();
                 entry->start_ts = get_sys_clock();
@@ -201,6 +211,11 @@ RC Row_mv2pl::access(TxnManager * txn, lock_t type, row_t * row) {
                 //txn->wait_starttime = get_sys_clock();
             }else{
                 rc = Abort;
+#if CLV == CLV2 || CLV == CLV3 
+            ATOM_CAS(txn->prep_ready, false, true);
+            ATOM_CAS(txn->need_prep_cont, true, false);
+            ATOM_CAS(txn->inconflict,txn->inconflict,-1);
+#endif
             }
             
 #endif          
@@ -208,6 +223,11 @@ RC Row_mv2pl::access(TxnManager * txn, lock_t type, row_t * row) {
 #if CC_ALG == MV_NO_WAIT
 
             rc = Abort;
+#if CLV == CLV2 || CLV == CLV3 
+            ATOM_CAS(txn->prep_ready, false, true);
+            ATOM_CAS(txn->need_prep_cont, true, false);
+            ATOM_CAS(txn->inconflict,txn->inconflict,-1);
+#endif
             DEBUG("abort %ld,%ld %ld %lx\n", txn->get_txn_id(), txn->get_batch_id(),
             _row->get_primary_key(), (uint64_t)_row);
             // printf("abort %ld %ld %lx\n",txn->get_txn_id(),_row->get_primary_key(),(uint64_t)_row);
@@ -287,7 +307,7 @@ void Row_mv2pl::lock_release(TxnManager * txn, lock_t type){
         ONCONFLICT * oncof = txn->onconflicthead;//这里不需要让其变为空，后续清理事务管理器时会自动设置
         ONCONFLICT * oncof2;
         while(oncof!=NULL){
-          if((*(oncof->txn)) != oncof->txn_1){
+          if((*(oncof->txn)) == NULL || (*(oncof->txn)) != oncof->txn_1 || (*(oncof->txn))->get_txn_id != oncof->txn_1->get_txn_id() ){
             oncof2 = oncof;
             oncof = oncof->next;
             mem_allocator.free(oncof2, sizeof(ONCONFLICT));
@@ -337,7 +357,8 @@ void Row_mv2pl::lock_release(TxnManager * txn, lock_t type){
                 //要清理的还在历史里时，拥有者应该也要被清理，但是此时拥有者还没有加上依赖，所以，需要将其设为回滚
                 owner->txn->set_rc(Abort);
                 ATOM_CAS(owner->txn->inconflict,owner->txn->inconflict,-1);
-                ATOM_CAS(oncof->txn_1->prep_ready, false, true);
+                ATOM_CAS(owner->txn->prep_ready, false, true);
+                ATOM_CAS(owner->txn->need_prep_cont, true, false);
                 owner = NULL;
                 release_2pl_entry(retire);
             }
@@ -405,7 +426,7 @@ void Row_mv2pl::lock_release(TxnManager * txn, lock_t type){
         ONCONFLICT * oncof = txn->onconflicthead;//这里不需要让其变为空，后续清理事务管理器时会自动设置
         ONCONFLICT * oncof2;
         while(oncof!=NULL){
-            if((*(oncof->txn)) != oncof->txn_1){
+            if((*(oncof->txn)) == NULL || (*(oncof->txn)) != oncof->txn_1 || (*(oncof->txn))->get_txn_id != oncof->txn_1->get_txn_id() ){
                 oncof2 = oncof;
                 oncof = oncof->next;
                 mem_allocator.free(oncof2, sizeof(ONCONFLICT));
@@ -509,6 +530,11 @@ void Row_mv2pl::retire(TxnManager * txn, row_t * row) {
         if (entry->txn->get_start_timestamp() < max_retire_cts) {
             entry->txn->inconflict = -1;
             entry->txn->set_rc(Abort);
+#if CLV == CLV2 || CLV == CLV3 
+            ATOM_CAS(entry->txn->prep_ready, false, true);
+            ATOM_CAS(entry->txn->need_prep_cont, true, false);
+            ATOM_CAS(entry->txn->inconflict,entry->txn->inconflict,-1);
+#endif
             release_2pl_entry(entry);
         }else{
             ex_num++;

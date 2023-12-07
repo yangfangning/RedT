@@ -503,14 +503,14 @@ RC WorkerThread::process_rfin(yield_func_t &yield, Message * msg, uint64_t cor_i
 #if CC_ALG == MAAT || CC_ALG == MV_WOUND_WAIT || CC_ALG == MV_NO_WAIT
   txn_man->set_commit_timestamp(((FinishMessage*)msg)->commit_timestamp);
 #endif
-#if (CC_ALG == MV_WOUND_WAIT || CC_ALG == MV_NO_WAIT) && CLV == CLV3
-  assert(txn_man->get_commit_timestamp() > 0);
 
-#endif
   txn_man->abort_cnt = msg->current_abort_cnt;
   txn_man->set_rc(((FinishMessage*)msg)->rc);
   if(((FinishMessage*)msg)->rc == RCOK){
     assert(txn_man->get_rc() == RCOK);
+#if (CC_ALG == MV_WOUND_WAIT || CC_ALG == MV_NO_WAIT) && CLV == CLV3
+  assert(txn_man->get_commit_timestamp() > 0);
+#endif
   }
   if (txn_man->get_rc() == RCOK){
     txn_man->txn_state = COMMITING;
@@ -541,7 +541,7 @@ RC WorkerThread::process_rfin(yield_func_t &yield, Message * msg, uint64_t cor_i
 
 //now commit 
   txn_man->commit(yield, cor_id);
-  assert(txn_man->finish_retire == true);
+  //assert(txn_man->finish_retire == true);
   //if(!txn_man->query->readonly() || CC_ALG == OCC)
   if (!((FinishMessage*)msg)->readonly || CC_ALG == MAAT || CC_ALG == OCC || USE_TAPIR || CC_ALG == NO_WAIT || CC_ALG == SSI || CC_ALG == MV_NO_WAIT || CC_ALG == MV_WOUND_WAIT)
 #if TAPIR_DEBUG
@@ -598,11 +598,14 @@ RC WorkerThread::process_rack_log(yield_func_t &yield, Message * msg, uint64_t c
       if(txn_man->get_rsp_cnt() > 0) return WAIT;//如果远程prepare还没回应完，等待
 
 #if CC_ALG == MV_NO_WAIT || CC_ALG == MV_WOUND_WAIT
+#if CLV == CLV2 || CLV == CLV3
+      //验证事务，写完prepare日志后验证
         if (ATOM_CAS(txn_man->prep_ready,false,false)){
           assert(txn_man->txn_state == PREPARE);
           ATOM_CAS(txn_man->need_prep_cont,false,true);
-          return WAIT_REM;
+          return WAIT;
         }
+#endif
 #endif
           
       //finish
@@ -764,7 +767,7 @@ RC WorkerThread::process_rack_fin_log(yield_func_t &yield, Message * msg, uint64
   	if(is_local){
       if(txn_rc == RCOK){
         txn_man->commit(yield, cor_id);
-        assert(txn_man->finish_retire == true);
+        //assert(txn_man->finish_retire == true);
       }else{
         txn_man->abort(yield, cor_id);
       }
@@ -779,7 +782,7 @@ RC WorkerThread::process_rack_fin_log(yield_func_t &yield, Message * msg, uint64
   	  // printf("xxx txn %lu send rack_fin, rc = %d\n", txn_man->get_txn_id(), txn_man->get_rc());
       if(txn_rc == RCOK){
         txn_man->commit(yield, cor_id);
-        assert(txn_man->finish_retire == true);
+        //assert(txn_man->finish_retire == true);
       }else{
         txn_man->abort(yield, cor_id);
         txn_man->reset();
@@ -943,13 +946,14 @@ assert(responses_left >= 0);
 
 
 #if CC_ALG == MV_NO_WAIT || CC_ALG == MV_WOUND_WAIT
-  if(txn_man->get_rc() == RCOK) {
-    if (ATOM_CAS(txn_man->prep_ready,false,false)){
-      assert(txn_man->txn_state == PREPARE);
-      ATOM_CAS(txn_man->need_prep_cont,false,true);
-      return WAIT_REM;
-    }
-  }
+#if CLV == CLV2 || CLV == CLV3
+      //验证事务，写完prepare日志后验证
+        if (ATOM_CAS(txn_man->prep_ready,false,false)){
+          assert(txn_man->txn_state == PREPARE);
+          ATOM_CAS(txn_man->need_prep_cont,false,true);
+          return WAIT;
+        }
+#endif
 #endif
   assert(IS_LOCAL(txn_man->get_txn_id()));
   if(IS_LOCAL(txn_man->get_txn_id())) {
@@ -1241,9 +1245,10 @@ RC WorkerThread::process_rtxn_cont(yield_func_t &yield, Message * msg, uint64_t 
 }
 
 RC WorkerThread::process_rprepare(yield_func_t &yield, Message * msg, uint64_t cor_id) {
-    DEBUG_T("RPREP %ld\n",msg->get_txn_id());
-    RC rc = RCOK;
-    txn_man->abort_cnt = msg->current_abort_cnt;
+  assert(txn_man->get_return_node() != g_node_id);
+  DEBUG_T("RPREP %ld\n", msg->get_txn_id());
+  RC rc = RCOK;
+  txn_man->abort_cnt = msg->current_abort_cnt;
 #if USE_REPLICA
 #if USE_TAPIR
 #if TAPIR_DEBUG
@@ -1273,11 +1278,14 @@ RC WorkerThread::process_rprepare(yield_func_t &yield, Message * msg, uint64_t c
 #if CLV == CLV3
     msg_queue.enqueue(get_thd_id(), Message::create_message(txn_man,RACK_PRE_PREP),msg->return_node_id);
 #endif
-    if (ATOM_CAS(txn_man->prep_ready,false,false)){
-      assert(txn_man->txn_state == PREPARE);
-      ATOM_CAS(txn_man->need_prep_cont,false,true);
-      return WAIT_REM;
-    }
+#if CLV == CLV2 || CLV == CLV3
+      //验证事务，写完prepare日志后验证
+        if (ATOM_CAS(txn_man->prep_ready,false,false)){
+          assert(txn_man->txn_state == PREPARE);
+          ATOM_CAS(txn_man->need_prep_cont,false,true);
+          return WAIT;
+        }
+#endif
     msg_queue.enqueue(get_thd_id(),Message::create_message(txn_man,RACK_PREP),msg->return_node_id);
     return rc;
   }

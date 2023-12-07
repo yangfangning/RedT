@@ -175,7 +175,6 @@ Message * Message::create_message(RemReqType rtype) {
     case RACK_LOG:
     case RACK_FIN_LOG:
     case RACK_CO_LOG:
-    case RACK_PREP_CONT:
       msg = new AckMessage;
       break;
     case CL_QRY:
@@ -197,6 +196,7 @@ Message * Message::create_message(RemReqType rtype) {
     case RLOG:
     case RFIN_LOG:
     case RCO_LOG:
+    case RACK_PREP_CONT:
       msg = new PrepareMessage;
       break;
     case RFWD:
@@ -1283,7 +1283,7 @@ void AckMessage::copy_to_buf(char * buf) {
   }
 #endif
 #if CC_ALG == MV_WOUND_WAIT || CC_ALG == MV_NO_WAIT
-  COPY_VAL(buf,prepare_timestamp,ptr);
+  COPY_BUF(buf,prepare_timestamp,ptr);
 #endif
  assert(ptr == get_size());
 }
