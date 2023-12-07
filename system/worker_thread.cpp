@@ -49,7 +49,7 @@ void WorkerThread::statqueue(uint64_t thd_id, Message * msg, uint64_t starttime)
   if (msg->rtype == RTXN_CONT ||
       msg->rtype == RQRY_RSP || msg->rtype == RACK_PREP  ||
       msg->rtype == RACK_FIN || msg->rtype == RTXN  ||
-      msg->rtype == CL_RSP || msg->rtype == RACK_PREP_CONT) {
+      msg->rtype == CL_RSP || msg->rtype == PREP_CONT) {
     uint64_t queue_time = get_sys_clock() - starttime;
 		INC_STATS(thd_id,trans_local_process,queue_time);
   } else if (msg->rtype == RQRY || msg->rtype == RQRY_CONT ||
@@ -118,8 +118,8 @@ void WorkerThread::process(yield_func_t &yield, Message * msg, uint64_t cor_id) 
       case RACK_PRE_PREP:
         rc = process_rack_pre_prep(yield, msg, cor_id);
 				break;
-      case RACK_PREP_CONT:
-        rc = process_rack_prep_cont(yield, msg, cor_id);
+      case PREP_CONT:
+        rc = process_prep_cont(yield, msg, cor_id);
 				break;
 			case RACK_FIN:
         rc = process_rack_rfin(msg);
@@ -370,7 +370,7 @@ RC WorkerThread::run(yield_func_t &yield, uint64_t cor_id) {
     DEBUG_T("worker run txn %ld type %d \n", msg->get_txn_id(),msg->get_rtype());
     if((msg->rtype != CL_QRY && msg->rtype != CL_QRY_O && msg->rtype != RLOG && msg->rtype != RFIN_LOG) || CC_ALG == CALVIN) {
       txn_man = get_transaction_manager(msg);//获取事务的管理器，没有就建一个
-      if(msg->rtype == RACK_LOG || msg->rtype == RACK_FIN_LOG || msg->rtype == RACK_FIN || msg->rtype == RACK_PREP || msg->rtype == RACK_PREP_CONT || msg->rtype == SET_CO_TS || 
+      if(msg->rtype == RACK_LOG || msg->rtype == RACK_FIN_LOG || msg->rtype == RACK_FIN || msg->rtype == RACK_PREP || msg->rtype == PREP_CONT || msg->rtype == SET_CO_TS || 
       msg->rtype == RACK_PRE_PREP
       //  || msg->rtype == RPREPARE
        ){ 
@@ -381,7 +381,7 @@ RC WorkerThread::run(yield_func_t &yield, uint64_t cor_id) {
           DEBUG_T("txn %ld type %d already commit, query?%d, partitions_touched?%d, abort cnt %d, msg abort cnt %d\n", msg->get_txn_id(),msg->get_rtype(), !txn_man->query, txn_man->query->partitions_touched.size() == 0 , txn_man->abort_cnt, msg->current_abort_cnt);
           continue;
         }
-        else if (txn_man->txn_state == COMMITING && (msg->rtype == RACK_PREP || msg->rtype == RACK_PREP_CONT || msg->rtype == RACK_PRE_PREP)) {
+        else if (txn_man->txn_state == COMMITING && (msg->rtype == RACK_PREP || msg->rtype == PREP_CONT || msg->rtype == RACK_PRE_PREP)) {
           DEBUG_T("txn %ld type %d state %ld\n", msg->get_txn_id(),msg->get_rtype(), txn_man->txn_state);
           continue;
         }
@@ -681,7 +681,7 @@ RC WorkerThread::process_rack_log(yield_func_t &yield, Message * msg, uint64_t c
   return RCOK;
 }
 
-RC WorkerThread::process_rack_prep_cont(yield_func_t &yield, Message * msg, uint64_t cor_id) {
+RC WorkerThread::process_prep_cont(yield_func_t &yield, Message * msg, uint64_t cor_id) {
   RC rc = RCOK;  
   assert(txn_man->need_prep_cont == false);
   //这里其实可以增加统计，日志写完后，等待了多长时间进行统计信息
@@ -691,8 +691,7 @@ RC WorkerThread::process_rack_prep_cont(yield_func_t &yield, Message * msg, uint
     }else{
       assert(txn_man->get_log_rsp_cnt() == 0);
     }
-		if(txn_man->get_return_node() == g_node_id){
-      assert(IS_LOCAL(txn_man->get_txn_id()));
+		if(IS_LOCAL(txn_man->get_txn_id())){
       if(txn_man->get_rsp_cnt() > 0) return WAIT;//如果远程prepare还没回应完，等待  
       //finish
       uint64_t finish_start_time = get_sys_clock();
@@ -727,7 +726,7 @@ RC WorkerThread::process_rack_prep_cont(yield_func_t &yield, Message * msg, uint
         return RCOK;
       }
     }else{
-      msg_queue.enqueue(get_thd_id(), Message::create_message(txn_man,RACK_PREP),txn_man->get_return_node());
+      msg_queue.enqueue(get_thd_id(), Message::create_message(txn_man,RACK_PREP),GET_NODE_ID(txn_man->get_txn_id()));
       return RCOK;
     }    
 }

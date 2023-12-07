@@ -182,7 +182,7 @@ void TxnTable::restart_prep(uint64_t thd_id, uint64_t txn_id,uint64_t batch_id){
 
   while (t_node != NULL) {
     if(is_matching_txn_node(t_node,txn_id,batch_id)) {
-      work_queue.enqueue(thd_id,Message::create_message(t_node->txn_man,RACK_PREP_CONT),false);
+      work_queue.enqueue(thd_id,Message::create_message(t_node->txn_man,PREP_CONT),false);
       break;
     }
     t_node = t_node->next;

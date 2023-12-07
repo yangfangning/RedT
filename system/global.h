@@ -340,7 +340,7 @@ enum RemReqType {
     CALVIN_ACK,
     RCO_LOG,
     RACK_CO_LOG,
-    RACK_PREP_CONT,
+    PREP_CONT,
     RACK_PRE_PREP,
     SET_CO_TS,
   NO_MSG

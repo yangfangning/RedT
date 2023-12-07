@@ -196,7 +196,7 @@ Message * Message::create_message(RemReqType rtype) {
     case RLOG:
     case RFIN_LOG:
     case RCO_LOG:
-    case RACK_PREP_CONT:
+    case PREP_CONT:
       msg = new PrepareMessage;
       break;
     case RFWD:
@@ -373,7 +373,7 @@ void Message::release_message(Message * msg) {
     case RACK_LOG:
     case RACK_FIN_LOG:
     case RACK_CO_LOG:
-    case RACK_PREP_CONT:
+    
     case RACK_FIN: {
       AckMessage * m_msg = (AckMessage*)msg;
       m_msg->release();
@@ -400,6 +400,7 @@ void Message::release_message(Message * msg) {
     case RLOG:
     case RFIN_LOG:
     case RCO_LOG:
+    case PREP_CONT:
     case RPREPARE: {
       PrepareMessage * m_msg = (PrepareMessage*)msg;
       m_msg->release();
