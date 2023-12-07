@@ -307,7 +307,7 @@ void Row_mv2pl::lock_release(TxnManager * txn, lock_t type){
         ONCONFLICT * oncof = txn->onconflicthead;//这里不需要让其变为空，后续清理事务管理器时会自动设置
         ONCONFLICT * oncof2;
         while(oncof!=NULL){
-          if((*(oncof->txn)) == NULL || (*(oncof->txn)) != oncof->txn_1 || (*(oncof->txn))->get_txn_id != oncof->txn_1->get_txn_id() ){
+          if((*(oncof->txn)) == NULL || (*(oncof->txn)) != oncof->txn_1 || (*(oncof->txn))->get_txn_id() != oncof->txn_1->get_txn_id() ){
             oncof2 = oncof;
             oncof = oncof->next;
             mem_allocator.free(oncof2, sizeof(ONCONFLICT));
@@ -426,7 +426,7 @@ void Row_mv2pl::lock_release(TxnManager * txn, lock_t type){
         ONCONFLICT * oncof = txn->onconflicthead;//这里不需要让其变为空，后续清理事务管理器时会自动设置
         ONCONFLICT * oncof2;
         while(oncof!=NULL){
-            if((*(oncof->txn)) == NULL || (*(oncof->txn)) != oncof->txn_1 || (*(oncof->txn))->get_txn_id != oncof->txn_1->get_txn_id() ){
+            if((*(oncof->txn)) == NULL || (*(oncof->txn)) != oncof->txn_1 || (*(oncof->txn))->get_txn_id() != oncof->txn_1->get_txn_id() ){
                 oncof2 = oncof;
                 oncof = oncof->next;
                 mem_allocator.free(oncof2, sizeof(ONCONFLICT));

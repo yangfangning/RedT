@@ -486,9 +486,12 @@ enum PPSTxnType {
 #define TEST            4
 #define DA 5
 //可控锁冲突时机
-#define CLV3 3//增加一轮通信
-#define CLV2 2//收到提交操作后执行
 #define CLV1 1//正常时间提交
+#define CLV2 2//收到提交操作后执行
+#define CLV3 3//增加一轮通信
+#define CLV4 4//测试一下问题
+
+
 // Concurrency Control Algorithm并发控制算法
 #define NO_WAIT           1
 #define WAIT_DIE          2
