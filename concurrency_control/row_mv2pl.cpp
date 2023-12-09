@@ -136,8 +136,8 @@ RC Row_mv2pl::access(TxnManager * txn, lock_t type, row_t * row) {
             //读的数据不为空,且没提交增加依赖
             //前驱事务加依赖
             ONCONFLICT * entry = whis->txn->creat_on_entry();
-            entry->txn = &txn;
-            entry->txn_1 = txn;
+            entry->txn_id = txn->get_txn_id();
+            entry->txn_id = txn->abort_cnt;
             entry->next = NULL;
             if(whis->txn->onconflicthead){
               whis->txn->onconflicttail->next = entry;
@@ -253,8 +253,8 @@ RC Row_mv2pl::access(TxnManager * txn, lock_t type, row_t * row) {
                     //读的数据不为空,且没提交增加依赖
                     //前驱事务加依赖
                     ONCONFLICT * entry = whis->txn->creat_on_entry();
-                    entry->txn = &txn;
-                    entry->txn_1 = txn;
+                    entry->txn_id = txn->get_txn_id();
+                    entry->txn_id = txn->abort_cnt;
                     entry->next = NULL;
                     if(whis->txn->onconflicthead){
                         whis->txn->onconflicttail->next = entry;
@@ -307,26 +307,11 @@ void Row_mv2pl::lock_release(TxnManager * txn, lock_t type){
         ONCONFLICT * oncof = txn->onconflicthead;//这里不需要让其变为空，后续清理事务管理器时会自动设置
         ONCONFLICT * oncof2;
         while(oncof!=NULL){
-          if((*(oncof->txn)) == NULL || (*(oncof->txn)) != oncof->txn_1 || (*(oncof->txn))->get_txn_id() != oncof->txn_1->get_txn_id() ){
-            oncof2 = oncof;
-            oncof = oncof->next;
-            mem_allocator.free(oncof2, sizeof(ONCONFLICT));
-            continue;
-          }
-          //此时的事务要么是有依赖的事务，要么要回滚，但是还没有开始执行
-          assert(oncof->txn_1->inconflict != 0);
-          ATOM_CAS(oncof->txn_1->inconflict,oncof->txn_1->inconflict,-1);
-          oncof->txn_1->set_rc(Abort);
-          // 对于回滚操作，将可以返回prepare标志设为true
-          ATOM_CAS(oncof->txn_1->prep_ready, false, true);
-          if (ATOM_CAS(oncof->txn_1->need_prep_cont,true,false)) {
-            txn_table.restart_prep(
-                txn->get_thd_id(), oncof->txn_1->get_txn_id(),
-                oncof->txn_1->get_batch_id());  // 唤醒事务，等待者上位，重新执行事务，
-            }
-            oncof2 = oncof;
-            oncof = oncof->next;
-            mem_allocator.free(oncof2, sizeof(ONCONFLICT));
+            //这里通过事务id找到这个事务，这个事务一定还在事务表中，如果事务的回滚次数还能对上，并且该事务的inconflict还是大于0的，就设为-1
+          txn_table.clear_onconflict_xp(txn->get_thd_id(),oncof->txn_id, 0, oncof->abort_cnt);
+          oncof2 = oncof;
+          oncof = oncof->next;
+          mem_allocator.free(oncof2, sizeof(ONCONFLICT));
         }
         //判断回滚的事务是否是拥有者，是的话不用清理历史了，否则要清理历史
         //不是拥有者
@@ -426,25 +411,11 @@ void Row_mv2pl::lock_release(TxnManager * txn, lock_t type){
         ONCONFLICT * oncof = txn->onconflicthead;//这里不需要让其变为空，后续清理事务管理器时会自动设置
         ONCONFLICT * oncof2;
         while(oncof!=NULL){
-            if((*(oncof->txn)) == NULL || (*(oncof->txn)) != oncof->txn_1 || (*(oncof->txn))->get_txn_id() != oncof->txn_1->get_txn_id() ){
-                oncof2 = oncof;
-                oncof = oncof->next;
-                mem_allocator.free(oncof2, sizeof(ONCONFLICT));
-                continue;
-            }
-            //此时的事务要么是有依赖的事务，要么要回滚，但是还没有开始执行
-            assert(oncof->txn_1->inconflict != 0);
-            if (oncof->txn_1->decr_pr() == 0){
-              assert(ATOM_CAS(oncof->txn_1->prep_ready, false, true));
-              if (ATOM_CAS(oncof->txn_1->need_prep_cont,true,false)) {
-                    txn_table.restart_prep(
-                    txn->get_thd_id(), oncof->txn_1->get_txn_id(),
-                    oncof->txn_1->get_batch_id());  // 唤醒事务，等待者上位，重新执行事务，
-                }
-            }
-            oncof2 = oncof;
-            oncof = oncof->next;
-            mem_allocator.free(oncof2, sizeof(ONCONFLICT));
+            //这里通过事务id找到这个事务，这个事务一定还在事务表中，如果事务的回滚次数还能对上，并且该事务的inconflict还是大于0的，就设为-1
+          txn_table.clear_onconflict_co(txn->get_thd_id(),oncof->txn_id, 0, oncof->abort_cnt);
+          oncof2 = oncof;
+          oncof = oncof->next;
+          mem_allocator.free(oncof2, sizeof(ONCONFLICT));
         }
         //将他写的历史版本的标志设为true
         assert(retire_head);

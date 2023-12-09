@@ -172,7 +172,8 @@ void TxnTable::restart_txn(uint64_t thd_id, uint64_t txn_id,uint64_t batch_id){
   ATOM_CAS(pool[pool_id]->modify,true,false);
 
 }
-void TxnTable::restart_prep(uint64_t thd_id, uint64_t txn_id,uint64_t batch_id){
+
+void TxnTable::clear_onconflict_xp(uint64_t thd_id, uint64_t txn_id, uint64_t batch_id, uint64_t abort_cnt ){
   uint64_t pool_id = txn_id % pool_size;
   // set modify bit for this pool: txn_id % pool_size
   while (!ATOM_CAS(pool[pool_id]->modify, false, true)) {
@@ -181,16 +182,57 @@ void TxnTable::restart_prep(uint64_t thd_id, uint64_t txn_id,uint64_t batch_id){
   txn_node_t t_node = pool[pool_id]->head;
 
   while (t_node != NULL) {
+    //当事务表中有这个事务（事务回滚后会从里面删除，但是回滚线程又会创建一个新的加进来，这两个事务的事务id是相同的，也保留这一定的信息）
     if(is_matching_txn_node(t_node,txn_id,batch_id)) {
-      work_queue.enqueue(thd_id,Message::create_message(t_node->txn_man,PREP_CONT),false);
+      if(t_node->txn_man->abort_cnt == abort_cnt || t_node->txn_man->get_rc() != Abort){
+        assert(t_node->txn_man->inconflict > 0);
+        //对于回滚的事务，后续事务都要回滚
+        ATOM_CAS(t_node->txn_man->inconflict,t_node->txn_man->inconflict,-1);
+        t_node->txn_man->set_rc(Abort);
+        ATOM_CAS(t_node->txn_man->prep_ready, false, true);
+        if (ATOM_CAS(t_node->txn_man->need_prep_cont,true,false)) {
+          work_queue.enqueue(thd_id,Message::create_message(t_node->txn_man,PREP_CONT),false);
+        }
+      }
+      //找到就返回，不管是不是加依赖的事务
       break;
     }
     t_node = t_node->next;
   }
 
-  // unset modify bit for this pool: txn_id % pool_size
   ATOM_CAS(pool[pool_id]->modify,true,false);
+}
 
+
+void TxnTable::clear_onconflict_co(uint64_t thd_id, uint64_t txn_id, uint64_t batch_id, uint64_t abort_cnt ){
+  uint64_t pool_id = txn_id % pool_size;
+  // set modify bit for this pool: txn_id % pool_size
+  while (!ATOM_CAS(pool[pool_id]->modify, false, true)) {
+  };
+
+  txn_node_t t_node = pool[pool_id]->head;
+
+  while (t_node != NULL) {
+    //当事务表中有这个事务（事务回滚后会从里面删除，但是回滚线程又会创建一个新的加进来，这两个事务的事务id是相同的，也保留这一定的信息）
+    if(is_matching_txn_node(t_node,txn_id,batch_id)) {
+      if(t_node->txn_man->abort_cnt == abort_cnt || t_node->txn_man->get_rc() != Abort){
+        assert(t_node->txn_man->inconflict > 0);
+        if(t_node->txn_man->decr_pr() == 0){
+          //对于提交的事务，只有后续事务的依赖降到0才会将准备返回prepare变为true
+          ATOM_CAS(t_node->txn_man->prep_ready, false, true);
+          if (ATOM_CAS(t_node->txn_man->need_prep_cont,true,false)) {
+            work_queue.enqueue(thd_id,Message::create_message(t_node->txn_man,PREP_CONT),false);
+          }
+        }
+        
+      }
+      //找到就返回，不管是不是加依赖的事务
+      break;
+    }
+    t_node = t_node->next;
+  }
+
+  ATOM_CAS(pool[pool_id]->modify,true,false);
 }
 
 void TxnTable::release_transaction_manager(uint64_t thd_id, uint64_t txn_id, uint64_t batch_id){

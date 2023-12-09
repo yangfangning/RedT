@@ -128,8 +128,8 @@ public:
 	double lat_other_time_start;
 };
 struct ONCONFLICT {
-  TxnManager ** txn;
-  TxnManager * txn_1;
+  uint64_t txn_id;
+  uint64_t abort_cnt;
   ONCONFLICT * next;
 };
 
@@ -223,7 +223,7 @@ public:
 	int volatile    ready_part;
 	int volatile    ready_ulk;
 	//为了添加依赖
-	ONCONFLICT* creat_on_entry();
+	ONCONFLICT * creat_on_entry();
     int inconflict;
 	//依赖的头是最先来的，每次新加一个新的，就会在在尾部加，清理从头往后遍历
 	ONCONFLICT * onconflicthead;

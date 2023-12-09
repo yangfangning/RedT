@@ -1645,7 +1645,7 @@ RC TxnManager::validate(yield_func_t &yield, uint64_t cor_id) {
 #if MODE != NORMAL_MODE
 	return RCOK;
 #endif
-	if (CC_ALG != OCC && CC_ALG != MAAT) {
+	if (CC_ALG != OCC && CC_ALG != MAAT && CC_ALG != SSI) {
 		return RCOK;
 	}
 	RC rc = RCOK;

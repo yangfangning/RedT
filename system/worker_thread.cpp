@@ -1244,7 +1244,6 @@ RC WorkerThread::process_rtxn_cont(yield_func_t &yield, Message * msg, uint64_t 
 }
 
 RC WorkerThread::process_rprepare(yield_func_t &yield, Message * msg, uint64_t cor_id) {
-  assert(txn_man->get_return_node() != g_node_id);
   DEBUG_T("RPREP %ld\n", msg->get_txn_id());
   RC rc = RCOK;
   txn_man->abort_cnt = msg->current_abort_cnt;
