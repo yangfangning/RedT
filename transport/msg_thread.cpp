@@ -508,6 +508,7 @@ void MessageThread::run() {
 #endif
 
   sbuf = buffer[dest_node_id];
+  DEBUG("sbuf.ptr %ld msg.size %ld sbuf.cnt %d\n", sbuf->ptr, msg->get_size(), sbuf->cnt);
 
   if(!sbuf->fits(msg->get_size())) {
     assert(sbuf->cnt > 0);

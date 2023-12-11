@@ -235,6 +235,7 @@ void WorkerThread::commit() {
 
   // Send result back to client
 #if !SERVER_GENERATE_QUERIES
+    DEBUG_T("CL_RSP txn %ld client %d\n", txn_man->get_txn_id(), txn_man->client_id);
     msg_queue.enqueue(get_thd_id(),Message::create_message(txn_man,CL_RSP),txn_man->client_id);
     // printf("CL_RSP txn %ld client %d, is local %d?\n", txn_man->get_txn_id(), txn_man->client_id, IS_LOCAL(txn_man->get_txn_id()));
 #endif
@@ -270,6 +271,7 @@ void WorkerThread::abort() {
   INC_STATS(get_thd_id(), trans_abort_count, 1);
   INC_STATS(get_thd_id(), trans_total_count, 1);
   #if WORKLOAD != DA //actually DA do not need real abort. Just count it and do not send real abort msg.
+  DEBUG_T("abort txn %ld client %d\n", txn_man->get_txn_id(), txn_man->client_id);
   uint64_t penalty =
       abort_queue.enqueue(get_thd_id(), txn_man->get_txn_id(), txn_man, txn_man->get_abort_cnt());
   // printf("abort txn %ld client %d, is local %d?\n", txn_man->get_txn_id(), txn_man->client_id, IS_LOCAL(txn_man->get_txn_id()));
@@ -533,6 +535,7 @@ RC WorkerThread::process_rfin(yield_func_t &yield, Message * msg, uint64_t cor_i
     txn_man->abort(yield, cor_id);
     txn_man->reset();
     txn_man->reset_query();
+    DEBUG_T("%d:%d send abort finish ack to %d\n", g_node_id, msg->get_txn_id(), GET_NODE_ID(msg->get_txn_id()));
     // printf("%d:%d send abort finish ack to %d\n", g_node_id, msg->get_txn_id(), GET_NODE_ID(msg->get_txn_id()));  
     msg_queue.enqueue(get_thd_id(), Message::create_message(txn_man, RACK_FIN),
                       GET_NODE_ID(msg->get_txn_id()));
@@ -547,6 +550,7 @@ RC WorkerThread::process_rfin(yield_func_t &yield, Message * msg, uint64_t cor_i
 #if TAPIR_DEBUG
     printf("%d:%d send commit finish ack to %d\n", g_node_id, msg->get_txn_id(), GET_NODE_ID(msg->get_txn_id()));
 #endif
+    DEBUG_T("%d:%d send COMMIT finish ack to %d\n", g_node_id, msg->get_txn_id(), GET_NODE_ID(msg->get_txn_id()));
     msg_queue.enqueue(get_thd_id(), Message::create_message(txn_man, RACK_FIN),
                       GET_NODE_ID(msg->get_txn_id()));
   // release_txn_man();
@@ -592,7 +596,7 @@ RC WorkerThread::process_rack_log(yield_func_t &yield, Message * msg, uint64_t c
     INC_STATS(get_thd_id(), trans_prepare_log_message_count, 1);
 
 
-    //这个情况是远程的日志写完都返回prepare消息了，本地还没写完，的情况
+    //这个情况是远程的日志写完都返回prepare消息了，本地还没写完，的情况，或者是单分区事务的情况
 		if(txn_man->get_return_node() == g_node_id){
       assert(IS_LOCAL(txn_man->get_txn_id()));    
       if(txn_man->get_rsp_cnt() > 0) return WAIT;//如果远程prepare还没回应完，等待
@@ -682,7 +686,8 @@ RC WorkerThread::process_rack_log(yield_func_t &yield, Message * msg, uint64_t c
 }
 
 RC WorkerThread::process_prep_cont(yield_func_t &yield, Message * msg, uint64_t cor_id) {
-  RC rc = RCOK;  
+  RC rc = RCOK; 
+  DEBUG_T("RACK_PREP_CONT %ld\n",msg->get_txn_id()); 
   assert(txn_man->need_prep_cont == false);
   //这里其实可以增加统计，日志写完后，等待了多长时间进行统计信息
     //这个情况是远程的日志写完都返回prepare消息了，本地的还不能开始提交的情况
@@ -726,6 +731,8 @@ RC WorkerThread::process_prep_cont(yield_func_t &yield, Message * msg, uint64_t 
         return RCOK;
       }
     }else{
+      DEBUG_T("%d:%d send rack prep to %d\n", g_node_id, txn_man->get_txn_id(), txn_man->get_return_node());
+      DEBUG_T("%d:%d send rack PREP to %d\n", g_node_id, msg->get_txn_id(), GET_NODE_ID(txn_man->get_txn_id()));
       msg_queue.enqueue(get_thd_id(), Message::create_message(txn_man,RACK_PREP),GET_NODE_ID(txn_man->get_txn_id()));
       return RCOK;
     }    
@@ -743,6 +750,7 @@ RC WorkerThread::process_rfin_log(yield_func_t &yield, Message * msg, uint64_t c
 	// pthread_mutex_unlock(&log_lock);
 #endif
   // printf("%d:%d send rack fin log to %d\n", g_node_id, msg->get_txn_id(), msg->return_node_id);
+  DEBUG_T("%d:%d send rack fin log to %d\n", g_node_id, msg->get_txn_id(), msg->return_node_id);
   Message * return_msg = Message::create_message(NULL,RACK_FIN_LOG,msg->get_txn_id());
   return_msg->current_abort_cnt = msg->current_abort_cnt;
   msg_queue.enqueue(get_thd_id(),return_msg,msg->return_node_id);
@@ -786,7 +794,8 @@ RC WorkerThread::process_rack_fin_log(yield_func_t &yield, Message * msg, uint64
         txn_man->abort(yield, cor_id);
         txn_man->reset();
         txn_man->reset_query();
-      }  
+      } 
+      DEBUG_T("%d:%d send COMMIT finish ack to %d\n", g_node_id, msg->get_txn_id(),txn_man->get_return_node());
       msg_queue.enqueue(get_thd_id(), Message::create_message(txn_man, RACK_FIN), txn_man->get_return_node());      
       // release_txn_man();
     }    
@@ -799,7 +808,7 @@ RC WorkerThread::process_rack_pre_prep(yield_func_t &yield, Message * msg, uint6
   int responses_left = 0;
 
   if (!txn_man || !(txn_man->txn) || !txn_man->query || txn_man->query->partitions_touched.size() == 0 || txn_man->abort_cnt != msg->current_abort_cnt) {
-    DEBUG_T("RPREP_ACK skip %ld from %ld\n",msg->get_txn_id(),msg->get_return_id());
+    DEBUG_T("pre_RPREP_ACK skip %ld from %ld\n",msg->get_txn_id(),msg->get_return_id());
     return RCOK;
   }
   responses_left = txn_man->received_pre_response(((AckMessage*)msg)->rc);
@@ -812,6 +821,7 @@ RC WorkerThread::process_rack_pre_prep(yield_func_t &yield, Message * msg, uint6
 
   if(txn_man->get_rc() != Abort) {
     //设置提交时间戳，发送消息
+    DEBUG_T("%d:%d send commit ts to %d\n", g_node_id, msg->get_txn_id(),txn_man->get_return_node());
     txn_man->set_commit_timestamp(txn_man->max_prepare_timestamp);
     txn_man->send_co_ts_messages();
     txn_man->retire(yield, cor_id);
@@ -1266,6 +1276,7 @@ RC WorkerThread::process_rprepare(yield_func_t &yield, Message * msg, uint64_t c
     txn_man->set_prepare_timestamp(get_next_ts());
 //clv3验证
 #if CLV == CLV3
+    DEBUG_T("%d:%d send rack_pre_prep ack to %d\n", g_node_id, msg->get_txn_id(),msg->return_node_id);
     msg_queue.enqueue(get_thd_id(), Message::create_message(txn_man,RACK_PRE_PREP),msg->return_node_id); 
 #endif
     txn_man->log_replica(RLOG, msg->return_node_id);
@@ -1274,6 +1285,7 @@ RC WorkerThread::process_rprepare(yield_func_t &yield, Message * msg, uint64_t c
   }else{
     txn_man->set_prepare_timestamp(txn_man->get_start_timestamp());
 #if CLV == CLV3
+    DEBUG_T("%d:%d send rack_pre_prep ack to %d\n", g_node_id, msg->get_txn_id(),msg->return_node_id);
     msg_queue.enqueue(get_thd_id(), Message::create_message(txn_man,RACK_PRE_PREP),msg->return_node_id);
 #endif
 #if CLV == CLV2 || CLV == CLV3
@@ -1284,6 +1296,7 @@ RC WorkerThread::process_rprepare(yield_func_t &yield, Message * msg, uint64_t c
           return WAIT;
         }
 #endif
+    DEBUG_T("%d:%d send rack_prep ack to %d\n", g_node_id, msg->get_txn_id(),msg->return_node_id);
     msg_queue.enqueue(get_thd_id(),Message::create_message(txn_man,RACK_PREP),msg->return_node_id);
     return rc;
   }

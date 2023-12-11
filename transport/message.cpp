@@ -314,6 +314,7 @@ void Message::mcopy_to_buf(char * buf) {
 }
 
 void Message::release_message(Message * msg) {
+  DEBUG_T("txn %ld msg type %d release\n", msg->get_txn_id(), msg->get_rtype());
   switch(msg->rtype) {
     case INIT_DONE: {
       InitDoneMessage * m_msg = (InitDoneMessage*)msg;

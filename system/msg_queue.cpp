@@ -72,6 +72,7 @@ void MessageQueue::enqueue(uint64_t thd_id, Message * msg,uint64_t dest) {
   //if(thd_id > 3) printf("MQ Enqueue thread id: %ld\n", thd_id);
 
   DEBUG("MQ Enqueue %ld\n",dest);
+  DEBUG_T("txn %ld type %d push queue\n",msg->get_txn_id(),msg->get_rtype());
   assert(dest < g_total_node_cnt);
 #if ONE_NODE_RECIEVE == 1 && defined(NO_REMOTE) && LESS_DIS_NUM == 10
 #else
@@ -103,6 +104,7 @@ void MessageQueue::enqueue(uint64_t thd_id, Message * msg,uint64_t dest) {
 #endif
   while (!m_queue[rand]->push(entry) && !simulation->is_done()) {
   }
+  DEBUG_T("push success\n");
   INC_STATS(thd_id,mtx[3],get_sys_clock() - mtx_time_start);
   INC_STATS(thd_id,msg_queue_enq_cnt,1);
   sem_wait(&_semaphore);

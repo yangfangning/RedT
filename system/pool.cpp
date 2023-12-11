@@ -64,7 +64,7 @@ void TxnManPool::get(uint64_t thd_id, TxnManager *& item) {
   }
   item->init(thd_id,_wl);
 }
-//进栈
+//事务回滚会，将回滚的事务的事务管理器放入pool中，等待下一个新事务的获取，才出栈
 void TxnManPool::put(uint64_t thd_id, TxnManager * item) {
   item->release();
   // item->reset();

@@ -313,16 +313,16 @@
 // Benchmark
 /***********************************************/
 // max number of rows touched per transaction
-#define MAX_ROW_PER_TXN       32
+#define MAX_ROW_PER_TXN       64
 #define QUERY_INTVL         1UL
 #define MAX_TXN_PER_PART 10000
 #define FIRST_PART_LOCAL      true
-#define MAX_TUPLE_SIZE        64 // in bytes
+#define MAX_TUPLE_SIZE        1024 // in bytes
 #define GEN_BY_MPR false
 // ==== [YCSB] ====
 // SKEW_METHOD:
 //    ZIPF: use ZIPF_THETA distribution
-//    HOT: use ACCESS_PERC of the accesses go to DATA_PERC of the data
+//    HOT: use ACCESS_PERC of the accesses go to DATA_PERC of the data热点
 #define SKEW_METHOD ZIPF
 #define DATA_PERC 100
 #define ACCESS_PERC 0.03

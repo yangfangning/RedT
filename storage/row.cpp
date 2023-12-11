@@ -300,6 +300,7 @@ RC row_t::get_row(yield_func_t &yield,access_t type, TxnManager *txn, Access *ac
 	txn->cur_row->init(get_table(), this->get_part_id());
 	assert(txn->cur_row->get_schema() == this->get_schema());
 #elif CC_ALG == MV_NO_WAIT || CC_ALG == MV_WOUND_WAIT
+	DEBUG_M("row_t::get_row MV alloc \n");
 	INC_STATS(txn->get_thd_id(), trans_cur_row_init_time, get_sys_clock() - init_time);
 	lock_t lt = (type == RD || type == SCAN) ? DLOCK_SH : DLOCK_EX; 
 	rc = this->manager->access(txn, lt, NULL);
@@ -351,7 +352,7 @@ RC row_t::get_row(yield_func_t &yield,access_t type, TxnManager *txn, Access *ac
 #endif
 	//找到了！！！多版本，对于写操作，会创建一个新的行
 	if (rc != Abort && (CC_ALG == MVCC || CC_ALG == SSI || CC_ALG == MV_NO_WAIT || CC_ALG == MV_WOUND_WAIT) && type == WR) {
-		DEBUG_M("row_t::get_row MVCC alloc \n");
+		DEBUG_T("row_t::get_row MVCC alloc \n");
 		row_t * newr = (row_t *) mem_allocator.alloc(row_t::get_row_size(tuple_size));
 		newr->init(this->get_table(), get_part_id());
 		newr->copy(access->data);
