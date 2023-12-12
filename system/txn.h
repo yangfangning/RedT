@@ -182,8 +182,8 @@ public:
 	uint64_t        decr_rsp(int i);
 	uint64_t        incr_lr();
 	uint64_t        decr_lr();
-	uint64_t        incr_pr();
-	uint64_t        decr_pr();
+	int32_t        incr_pr();
+	int32_t        decr_pr();
 
 	RC commit(yield_func_t &yield, uint64_t cor_id);
 	RC start_commit(yield_func_t &yield, uint64_t cor_id);
@@ -224,7 +224,7 @@ public:
 	int volatile    ready_ulk;
 	//为了添加依赖
 	ONCONFLICT * creat_on_entry();
-    uint32_t inconflict;
+    int32_t inconflict;
 	//依赖的头是最先来的，每次新加一个新的，就会在在尾部加，清理从头往后遍历
 	ONCONFLICT * onconflicthead;
 	ONCONFLICT * onconflicttail;

@@ -47,7 +47,7 @@ void MessageQueue::init() {
 }
 
 void MessageQueue::statqueue(uint64_t thd_id, msg_entry * entry) {
-  Message *msg = entry->msg;
+  Message * msg = entry->msg;
   if (msg->rtype == CL_QRY || msg->rtype == CL_QRY_O || msg->rtype == RTXN_CONT ||
       msg->rtype == RQRY_RSP || msg->rtype == RACK_PREP  ||
       msg->rtype == RACK_FIN || msg->rtype == RTXN) {
@@ -203,6 +203,7 @@ uint64_t MessageQueue::dequeue(uint64_t thd_id, Message *& msg) {
     assert(dest < g_total_node_cnt);
     msg = entry->msg;
     DEBUG("MQ Dequeue %ld\n",dest)
+    DEBUG_T("txn %ld type %d  dequeue\n",msg->get_txn_id(),msg->get_rtype());
     statqueue(thd_id, entry);
     INC_STATS(thd_id,msg_queue_delay_time,curr_time - entry->starttime);
     INC_STATS(thd_id,msg_queue_cnt,1);

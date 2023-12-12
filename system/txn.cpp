@@ -1261,17 +1261,17 @@ uint64_t TxnManager::decr_lr() {
 	return result;
 }
 
-uint64_t TxnManager::incr_pr() {
+int32_t TxnManager::incr_pr() {
 	//ATOM_ADD(this->rsp_cnt,i);
-	uint64_t result;
+	int32_t result;
 	sem_wait(&rsp_mutex);
 	result = ++this->inconflict;
 	sem_post(&rsp_mutex);
 	return result;
 }
-uint64_t TxnManager::decr_pr() {
+int32_t TxnManager::decr_pr() {
 	//ATOM_SUB(this->rsp_cnt,i);
-	uint64_t result;
+	int32_t result;
 	sem_wait(&rsp_mutex);
 	result = --this->inconflict;
 	sem_post(&rsp_mutex);
@@ -1331,6 +1331,7 @@ void TxnManager::cleanup_row(yield_func_t &yield, RC rc, uint64_t rid, vector<ve
 #if CC_ALG != CALVIN
 #if ISOLATION_LEVEL != READ_UNCOMMITTED
 	row_t * orig_r = txn->accesses[rid]->orig_row;
+	DEBUG("txn %ld cleanup_row: %lx\n", get_txn_id(),(uint64_t)orig_r);
 	//如果回滚，且为单版本的话
 
   	if (ROLL_BACK && type == XP &&
@@ -1424,6 +1425,7 @@ RC TxnManager::get_row(yield_func_t &yield,row_t * row, access_t type, row_t *& 
 	uint64_t timespan;
 	RC rc = RCOK;
 	DEBUG_M("TxnManager::get_row access alloc\n");
+	DEBUG("get_row:orig_row: %lx\n", (uint64_t)row);
 	Access * access = NULL;
 	this->last_row = row;
 	this->last_type = type;
@@ -1439,6 +1441,7 @@ RC TxnManager::get_row(yield_func_t &yield,row_t * row, access_t type, row_t *& 
 
   	uint64_t middle_time = get_sys_clock();
 	if (rc == Abort || rc == WAIT) {
+		DEBUG("txn %ld conflict in %lx\n",get_txn_id(), (uint64_t)row);
 		row_rtn = NULL;
 		DEBUG_M("TxnManager::get_row(abort) access free\n");
 		access_pool.put(get_thd_id(),access);
@@ -1530,7 +1533,7 @@ RC TxnManager::get_row_post_wait(row_t *& row_rtn) {
 	if (type == WR) {
 		uint64_t part_id = row->get_part_id();
 		//printf("alloc 10 %ld\n",get_txn_id());
-		DEBUG_M("TxnManager::get_row_post_wait row_t alloc\n")
+		DEBUG("TxnManager::get_row_post_wait row_t alloc\n")
 		row_pool.get(get_thd_id(),access->orig_data);
 		access->orig_data->init(row->get_table(), part_id, 0);
 		access->orig_data->copy(row);

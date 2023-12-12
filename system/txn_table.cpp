@@ -186,6 +186,7 @@ void TxnTable::clear_onconflict_xp(uint64_t thd_id, uint64_t txn_id, uint64_t ba
     if(is_matching_txn_node(t_node,txn_id,batch_id)) {
       //if(t_node->txn_man->inconflict > 0){
       if(t_node->txn_man->abort_cnt == abort_cnt && t_node->txn_man->get_rc() != Abort){
+        DEBUG("inconflict: %d need become -1\n",t_node->txn_man->inconflict);
         assert(t_node->txn_man->inconflict > 0);
         //对于回滚的事务，后续事务都要回滚
         ATOM_CAS(t_node->txn_man->inconflict,t_node->txn_man->inconflict,-1);
@@ -218,8 +219,10 @@ void TxnTable::clear_onconflict_co(uint64_t thd_id, uint64_t txn_id, uint64_t ba
     if(is_matching_txn_node(t_node,txn_id,batch_id)) {
       //if(t_node->txn_man->inconflict > 0){
       if(t_node->txn_man->abort_cnt == abort_cnt && t_node->txn_man->get_rc() != Abort){
+        DEBUG("inconflict: %d need jian 1\n",t_node->txn_man->inconflict);
+        assert(t_node->txn_man->inconflict >= 0);
         t_node->txn_man->decr_pr();
-        //assert(t_node->txn_man->inconflict >= 0);
+        assert(t_node->txn_man->inconflict >= 0);
         if(t_node->txn_man->inconflict == 0){
           //对于提交的事务，只有后续事务的依赖降到0才会将准备返回prepare变为true
           ATOM_CAS(t_node->txn_man->prep_ready, false, true);

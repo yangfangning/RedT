@@ -342,7 +342,7 @@
 #define STRICT_PPT 1
 //only consider the primary replica here,
 //try keep part_per_txn=2 when use CROSS_DC_TXN_PERC
-#define CROSS_DC_TXN_PERC 0
+#define CROSS_DC_TXN_PERC 0.5
 // ==== [TPCC] ====
 // For large warehouse count, the tables do not fit in memory
 // small tpcc schemas shrink the table size.
@@ -392,7 +392,7 @@ enum DATxnType {
 #define MAX_DA_TABLE_SIZE 10000
 extern TPCCTxnType g_tpcc_txn_type;
 //#define TXN_TYPE          TPCC_ALL
-#define PERC_PAYMENT 1.0//全是new_order，0为全是payment
+#define PERC_PAYMENT 0.5
 #define FIRSTNAME_MINLEN      8
 #define FIRSTNAME_LEN         16
 #define LASTNAME_LEN        16
@@ -452,8 +452,8 @@ enum PPSTxnType {
 #define DEBUG_TIMESTAMP       false
 #define DEBUG_SYNTH         false
 #define DEBUG_ASSERT        false
-#define DEBUG_DISTR false
-#define DEBUG_TXN false
+#define DEBUG_DISTR true
+#define DEBUG_TXN true
 #define DEBUG_ALLOC false
 #define DEBUG_RACE false
 #define DEBUG_TIMELINE        false
