@@ -312,8 +312,8 @@ RC row_t::get_row(yield_func_t &yield,access_t type, TxnManager *txn, Access *ac
 	} else if (rc == WAIT) {
 		rc = WAIT;
 		INC_STATS(txn->get_thd_id(), trans_cur_row_copy_time, get_sys_clock() - copy_time);
-		goto end;
-	}
+        return rc;
+    }
 	if (rc != Abort) {
 		assert(access->data->get_data() != NULL);
 		assert(access->data->get_table() != NULL);

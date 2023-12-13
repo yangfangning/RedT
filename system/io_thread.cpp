@@ -201,7 +201,7 @@ RC InputThread::server_recv_loop() {
 }
 
 void OutputThread::setup() {
-	DEBUG_M("OutputThread::setup MessageThread alloc\n");
+	DEBUG("OutputThread::setup MessageThread alloc\n");
 	messager = (MessageThread *) mem_allocator.alloc(sizeof(MessageThread));
 	messager->init(_thd_id);
 	while (!simulation->is_setup_done()) {

@@ -1153,9 +1153,6 @@ RC WorkerThread::process_rqry_rsp(yield_func_t &yield, Message * msg, uint64_t c
 
   int responses_left = txn_man->received_response(((AckMessage*)msg)->rc);
   assert(responses_left >=0);
-  if(!txn_man->finish_read_write){
-    return WAIT;
-  }
   
   if(!txn_man->aborted && ((QueryResponseMessage*)msg)->rc == Abort) {
     txn_man->start_abort(yield, cor_id);
@@ -1239,7 +1236,6 @@ RC WorkerThread::process_rqry_cont(yield_func_t &yield, Message * msg, uint64_t 
   }
   // Send response
   if(rc != WAIT) {
-    txn_man->finish_read_write = true;
     msg_queue.enqueue(get_thd_id(),Message::create_message(txn_man,RQRY_RSP),txn_man->return_id);
   }
   return rc;
@@ -1255,9 +1251,6 @@ RC WorkerThread::process_rtxn_cont(yield_func_t &yield, Message * msg, uint64_t 
     txn_man->run_txn_post_wait();
   }
   RC rc = txn_man->run_txn(yield, cor_id);
-  if(rc != WAIT) {
-    txn_man->finish_read_write = true;
-  }
   check_if_done(rc);
   return RCOK;
 }
@@ -1482,9 +1475,6 @@ RC WorkerThread::process_rtxn( yield_func_t &yield, Message * msg, uint64_t cor_
     rc = txn_man->send_remote_request();
   } else {
     rc = txn_man->run_txn(yield, cor_id);
-  }
-  if(rc != WAIT){
-    txn_man->finish_read_write = true;
   }
   check_if_done(rc);
   return rc;

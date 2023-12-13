@@ -184,10 +184,9 @@ void TxnTable::clear_onconflict_xp(uint64_t thd_id, uint64_t txn_id, uint64_t ba
   while (t_node != NULL) {
     //事务表中只要不是本地回滚的事务一定还在这个tnode里面，没人会把他从里面拿出来，但是回滚的话会重新reset事务，事务的rc
     if(is_matching_txn_node(t_node,txn_id,batch_id)) {
-      //if(t_node->txn_man->inconflict > 0){
-      if(t_node->txn_man->abort_cnt == abort_cnt && t_node->txn_man->get_rc() != Abort){
+      DEBUG("inconflict: %d\n",t_node->txn_man->inconflict);
+      if(t_node->txn_man->abort_cnt == abort_cnt && t_node->txn_man->inconflict > 0){
         DEBUG("inconflict: %d need become -1\n",t_node->txn_man->inconflict);
-        assert(t_node->txn_man->inconflict > 0);
         //对于回滚的事务，后续事务都要回滚
         ATOM_CAS(t_node->txn_man->inconflict,t_node->txn_man->inconflict,-1);
         t_node->txn_man->set_rc(Abort);
@@ -217,8 +216,8 @@ void TxnTable::clear_onconflict_co(uint64_t thd_id, uint64_t txn_id, uint64_t ba
   while (t_node != NULL) {
     //当事务表中有这个事务（事务回滚后会从里面删除，但是回滚线程又会创建一个新的加进来，这两个事务的事务id是相同的，也保留这一定的信息）
     if(is_matching_txn_node(t_node,txn_id,batch_id)) {
-      //if(t_node->txn_man->inconflict > 0){
-      if(t_node->txn_man->abort_cnt == abort_cnt && t_node->txn_man->get_rc() != Abort){
+      DEBUG("inconflict: %d\n",t_node->txn_man->inconflict);
+      if(t_node->txn_man->abort_cnt == abort_cnt && t_node->txn_man->inconflict > 0){
         DEBUG("inconflict: %d need jian 1\n",t_node->txn_man->inconflict);
         assert(t_node->txn_man->inconflict >= 0);
         t_node->txn_man->decr_pr();

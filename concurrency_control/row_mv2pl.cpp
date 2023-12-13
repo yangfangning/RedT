@@ -307,19 +307,6 @@ void Row_mv2pl::lock_release(TxnManager * txn, lock_t type){
         DEBUG("txn %ld abort\n", txn->get_txn_id());
         Mv2plEntry * retire = owner;
 #if CLV == CLV2 || CLV == CLV3
-        //清空这个事务的依赖列表，这个都要做，所以到开头去
-        assert(txn->inconflict <= 0);
-        txn->decr_pr();
-        ONCONFLICT * oncof = txn->onconflicthead;//这里不需要让其变为空，后续清理事务管理器时会自动设置
-        ONCONFLICT * oncof2;
-        while(oncof!=NULL){
-            DEBUG("txn %ld clean onconflict xp %ld \n", txn->get_txn_id(), oncof->txn_id);
-            //这里通过事务id找到这个事务，这个事务一定还在事务表中，如果事务的回滚次数还能对上，并且该事务的inconflict还是大于0的，就设为-1
-          txn_table.clear_onconflict_xp(txn->get_thd_id(),oncof->txn_id, 0, oncof->abort_cnt);
-          oncof2 = oncof;
-          oncof = oncof->next;
-          mem_allocator.free(oncof2, sizeof(ONCONFLICT));
-        }
         //判断回滚的事务是否是拥有者，是的话不用清理历史了，否则要清理历史
         //不是拥有者
         if (owner == NULL || txn->get_txn_id() != owner->txn->get_txn_id()){
@@ -418,19 +405,7 @@ void Row_mv2pl::lock_release(TxnManager * txn, lock_t type){
             }
         }
     }else{//如果是提交操作，说明已经退休过了，只需要解除依赖就可以了
-    //能进入提交流程，说明事务的inconflict一定为0，接下来要做的就是让其依赖解除，行上的标志变为提交
-    assert(txn->inconflict == 0);
 #if CLV == CLV2 || CLV == CLV3
-        ONCONFLICT * oncof = txn->onconflicthead;//这里不需要让其变为空，后续清理事务管理器时会自动设置
-        ONCONFLICT * oncof2;
-        while(oncof!=NULL){
-            //这里通过事务id找到这个事务，这个事务一定还在事务表中，如果事务的回滚次数还能对上，并且该事务的inconflict还是大于0的，就设为-1
-            DEBUG("txn %ld clean onconflict co %ld \n", txn->get_txn_id(), oncof->txn_id);
-          txn_table.clear_onconflict_co(txn->get_thd_id(),oncof->txn_id, 0, oncof->abort_cnt);
-          oncof2 = oncof;
-          oncof = oncof->next;
-          mem_allocator.free(oncof2, sizeof(ONCONFLICT));
-        }
         //将他写的历史版本的标志设为true
         assert(retire_head);
         assert(retire_head->txn->get_txn_id() == txn->get_txn_id());
@@ -439,7 +414,6 @@ void Row_mv2pl::lock_release(TxnManager * txn, lock_t type){
 #endif
         max_cts = txn->get_commit_timestamp();
         //clear_history(txn);
-
     }
     
 

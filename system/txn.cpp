@@ -1391,6 +1391,25 @@ void TxnManager::cleanup(yield_func_t &yield, RC rc, uint64_t cor_id) {
 	for (int rid = row_cnt - 1; rid >= 0; rid --) {
 		cleanup_row(yield, rc,rid,remote_access,cor_id);  //return abort write row
 	}
+	//在这里将依赖清理，不在行里面清理，在这里是这个事务的所有行都提交完，加入历史，或者回滚后直接释放，在这之后将依赖与这个事务的事务进行唤醒
+#if (CC_ALG == MV_NO_WAIT || CC_ALG == MV_WOUND_WAIT) && (CLV == CLV2 || CLV == CLV3)
+	assert(this->inconflict <= 0);
+	ONCONFLICT * oncof = this->onconflicthead;//这里不需要让其变为空，后续清理事务管理器时会自动设置
+    ONCONFLICT * oncof2;
+    while(oncof!=NULL){
+		//这里通过事务id找到这个事务，这个事务一定还在事务表中，如果事务的回滚次数还能对上，并且该事务的inconflict还是大于0的，就设为-1
+		
+		if(rc == RCOK){
+			DEBUG("txn %ld clean onconflict co %ld \n", txn->get_txn_id(), oncof->txn_id);
+			txn_table.clear_onconflict_co(this->get_thd_id(),oncof->txn_id, 0, oncof->abort_cnt);
+		}else{
+			txn_table.clear_onconflict_xp(this->get_thd_id(),oncof->txn_id, 0, oncof->abort_cnt);
+		}
+		oncof2 = oncof;
+		oncof = oncof->next;
+		mem_allocator.free(oncof2, sizeof(ONCONFLICT));
+    }
+#endif
 
 #if CC_ALG == CALVIN
 	// cleanup locked rows
