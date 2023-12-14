@@ -532,6 +532,11 @@ RC WorkerThread::process_rfin(yield_func_t &yield, Message * msg, uint64_t cor_i
   
   if(((FinishMessage*)msg)->rc == Abort) {
 	  // printf("xxx txn %lu send rack_fin, rc = %d\n", txn_man->get_txn_id(), txn_man->get_rc());
+#if CLV == CLV2 || CLV == CLV3 
+    ATOM_CAS(txn_man->prep_ready, false, true);
+    ATOM_CAS(txn_man->need_prep_cont, true, false);
+    ATOM_CAS(txn_man->inconflict,txn_man->inconflict,-1);
+#endif
     txn_man->abort(yield, cor_id);
     txn_man->reset();
     txn_man->reset_query();
@@ -1156,6 +1161,8 @@ RC WorkerThread::process_rqry_rsp(yield_func_t &yield, Message * msg, uint64_t c
   
   if(!txn_man->aborted && ((QueryResponseMessage*)msg)->rc == Abort) {
     txn_man->start_abort(yield, cor_id);
+  }else if(!txn_man->finish_read_write){
+    return WAIT;
   }
 
   if (responses_left > 0) return WAIT;
@@ -1229,6 +1236,10 @@ RC WorkerThread::process_rqry(yield_func_t &yield, Message * msg, uint64_t cor_i
 RC WorkerThread::process_rqry_cont(yield_func_t &yield, Message * msg, uint64_t cor_id) {
   DEBUG_T("RQRY_CONT %ld from %ld\n",msg->get_txn_id(),msg->return_node_id);
   assert(!IS_LOCAL(msg->get_txn_id()));
+if (!txn_man->query || txn_man->query->partitions_touched.size() == 0) {
+    DEBUG_T("RQRY_CONT skip %ld\n",msg->get_txn_id());
+    return RCOK;
+  }
   RC rc = txn_man->get_rc();
   if(rc != Abort){
     txn_man->run_txn_post_wait();
@@ -1236,6 +1247,7 @@ RC WorkerThread::process_rqry_cont(yield_func_t &yield, Message * msg, uint64_t 
   }
   // Send response
   if(rc != WAIT) {
+    txn_man->finish_read_write = true;
     msg_queue.enqueue(get_thd_id(),Message::create_message(txn_man,RQRY_RSP),txn_man->return_id);
   }
   return rc;
@@ -1247,10 +1259,17 @@ RC WorkerThread::process_rtxn_cont(yield_func_t &yield, Message * msg, uint64_t 
   assert(IS_LOCAL(msg->get_txn_id()));
 
   txn_man->txn_stats.local_wait_time += get_sys_clock() - txn_man->txn_stats.wait_starttime;
+  if (!txn_man->query || txn_man->query->partitions_touched.size() == 0) {
+    DEBUG_T("RTXN_CONT skip %ld\n",msg->get_txn_id());
+    return RCOK;
+  }
   if(txn_man->get_rc() != Abort){
     txn_man->run_txn_post_wait();
   }
   RC rc = txn_man->run_txn(yield, cor_id);
+  if (rc!= WAIT){
+    txn_man->finish_read_write = true;
+  }
   check_if_done(rc);
   return RCOK;
 }
@@ -1476,6 +1495,9 @@ RC WorkerThread::process_rtxn( yield_func_t &yield, Message * msg, uint64_t cor_
   } else {
     rc = txn_man->run_txn(yield, cor_id);
   }
+  if (rc!= WAIT){
+    txn_man->finish_read_write = true;
+  }  
   check_if_done(rc);
   return rc;
 }

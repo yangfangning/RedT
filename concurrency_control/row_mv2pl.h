@@ -36,7 +36,7 @@ struct Mv2plhisEntry {
   TxnManager * txn;
   Mv2plhisEntry * next;
   Mv2plhisEntry * prev;
-  bool commited = false;
+  bool commited;
 };
 
 class Row_mv2pl {

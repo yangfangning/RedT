@@ -79,7 +79,8 @@ void Row_mv2pl::insert_history(ts_t ts, TxnManager * txn, row_t *row) {
 	new_entry->ts = ts;
     new_entry->txn = txn;
 	new_entry->row = row;
-	whis_len ++;
+    new_entry->commited = false;
+    whis_len ++;
     LIST_PUT_HEAD(writehistail, writehis, new_entry);
 }
 
@@ -99,7 +100,7 @@ RC Row_mv2pl::access(TxnManager * txn, lock_t type, row_t * row) {
 	//统计相关信息的，等到需要实验时解决
     INC_STATS(txn->get_thd_id(), trans_access_lock_wait_time, get_sys_clock() - starttime);
 	//查看是否有拥有者
-    bool conflict = owner != NULL;
+    bool conflict = (owner != NULL);
 	//如果是读操作
     if (type == DLOCK_SH) {//读一定是可以读到的，就是可能会等待前面事务确定
         //先推高本地最大读时间戳，由于本地最大最大读时间戳一定式是小于当前时间的，所以后来的写事物的本地提交时间戳一定大于这个读时间戳，所以本地时间戳不保存了
@@ -122,7 +123,7 @@ RC Row_mv2pl::access(TxnManager * txn, lock_t type, row_t * row) {
                     txn->incr_lr();
                     LIST_PUT_TAIL(waiters_read_head, waiters_read_tail, entry); 
                     waiter_cnt ++;
-                    rc == WAIT;
+                    rc = WAIT;
                     goto final;
                 }
             }
