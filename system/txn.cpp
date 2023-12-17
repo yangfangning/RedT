@@ -628,6 +628,13 @@ RC TxnManager::start_commit(yield_func_t &yield, uint64_t cor_id) {
 //本地事务的状态进入提交阶段中的prepa阶段
 	txn_state = PREPARE;
 #if !USE_TAPIR
+#if CLV == CLV3
+    if(this->query->partitions_touched.size() == 1){
+        this->set_commit_timestamp(this->max_prepare_timestamp);
+        this->retire(yield, cor_id);
+        this->finish_retire = true;
+    }
+#endif
 	if(has_local_write()){
 		log_replica(RLOG, g_node_id);
 	}
@@ -1400,7 +1407,7 @@ void TxnManager::cleanup(yield_func_t &yield, RC rc, uint64_t cor_id) {
 		//这里通过事务id找到这个事务，这个事务一定还在事务表中，如果事务的回滚次数还能对上，并且该事务的inconflict还是大于0的，就设为-1
 		
 		if(rc == RCOK){
-			DEBUG("txn %ld clean onconflict co %ld \n", txn->get_txn_id(), oncof->txn_id);
+			DEBUG("txn %ld clean onconflict co %ld \n", this->get_txn_id(), oncof->txn_id);
 			txn_table.clear_onconflict_co(this->get_thd_id(),oncof->txn_id, 0, oncof->abort_cnt);
 		}else{
 			txn_table.clear_onconflict_xp(this->get_thd_id(),oncof->txn_id, 0, oncof->abort_cnt);
