@@ -1229,7 +1229,6 @@ RC WorkerThread::process_rqry(yield_func_t &yield, Message * msg, uint64_t cor_i
   // Send response
   if(rc != WAIT){
 	  // printf("xxx txn %lu send rack_prep, rc = %d\n", txn_man->get_txn_id(), txn_man->get_rc());
-    txn_man->finish_read_write = true;
 #if EARLY_PREPARE
     msg_queue.enqueue(get_thd_id(),Message::create_message(txn_man,RACK_PREP),txn_man->return_id);
 #else
@@ -1253,7 +1252,6 @@ RC WorkerThread::process_rqry_cont(yield_func_t &yield, Message * msg, uint64_t 
   }
   // Send response
   if(rc != WAIT) {
-    txn_man->finish_read_write = true;
     msg_queue.enqueue(get_thd_id(),Message::create_message(txn_man,RQRY_RSP),txn_man->return_id);
   }
   return rc;
@@ -1273,9 +1271,6 @@ RC WorkerThread::process_rtxn_cont(yield_func_t &yield, Message * msg, uint64_t 
     txn_man->run_txn_post_wait();
   }
   RC rc = txn_man->run_txn(yield, cor_id);
-  if (rc!= WAIT){
-    txn_man->finish_read_write = true;
-  }
   check_if_done(rc);
   return RCOK;
 }
@@ -1501,9 +1496,7 @@ RC WorkerThread::process_rtxn( yield_func_t &yield, Message * msg, uint64_t cor_
   } else {
     rc = txn_man->run_txn(yield, cor_id);
   }
-  if (rc!= WAIT){
-    txn_man->finish_read_write = true;
-  }  
+ 
   check_if_done(rc);
   return rc;
 }

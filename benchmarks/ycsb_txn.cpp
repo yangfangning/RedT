@@ -259,6 +259,10 @@ RC YCSBTxnManager::run_txn(yield_func_t &yield, uint64_t cor_id) {
 #endif
 		
 	}
+	if (rc!= WAIT){
+    	DEBUG("finish read_write\n");
+    	txn_man->finish_read_write = true;
+  	}
 
     if(rc == Abort) total_num_atomic_retry++;
 	uint64_t curr_time = get_sys_clock();
