@@ -83,7 +83,7 @@
 /***********************************************/
 // Simulation + Hardware
 /***********************************************/
-#define CENTER_CNT 4
+#define CENTER_CNT 3
 #define NODE_CNT 3
 #define THREAD_CNT 1
 #define REM_THREAD_CNT 1
