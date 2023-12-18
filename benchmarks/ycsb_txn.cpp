@@ -239,7 +239,7 @@ RC YCSBTxnManager::run_txn(yield_func_t &yield, uint64_t cor_id) {
 	RC rc = txn->rc;
 	assert(CC_ALG != CALVIN);
 	if(IS_LOCAL(txn->txn_id) && state == YCSB_0 && next_record_id == 0 && rc != Abort) {
-		DEBUG("Running txn %ld\n",txn->txn_id);
+		DEBUG_T("Running txn %ld\n",txn->txn_id);
 		query->partitions_touched.add_unique(GET_PART_ID(0,g_node_id));
 #if PARAL_SUBTXN
 		rc = send_remote_subtxn();
@@ -260,8 +260,8 @@ RC YCSBTxnManager::run_txn(yield_func_t &yield, uint64_t cor_id) {
 		
 	}
 	if (rc!= WAIT){
-    	DEBUG("finish read_write\n");
-    	txn_man->finish_read_write = true;
+    	DEBUG_T("finish read_write\n");
+    	this->finish_read_write = true;
   	}
 
     if(rc == Abort) total_num_atomic_retry++;

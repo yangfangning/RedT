@@ -131,7 +131,7 @@ RC InputThread::client_recv_loop() {
 			}
 			//INC_STATS_ARR(get_thd_id(),all_lat,timespan);
 			inf = client_man.dec_inflight(return_node_offset);
-			DEBUG("Recv %ld from %ld, %ld -- %f\n", ((ClientResponseMessage *)msg)->txn_id,
+			DEBUG_T("Recv %ld from %ld, %ld -- %f\n", ((ClientResponseMessage *)msg)->txn_id,
 						msg->return_node_id, inf, float(timespan) / BILLION);
 			assert(inf >=0);
 			// delete message here
@@ -201,7 +201,7 @@ RC InputThread::server_recv_loop() {
 }
 
 void OutputThread::setup() {
-	DEBUG("OutputThread::setup MessageThread alloc\n");
+	DEBUG_T("OutputThread::setup MessageThread alloc\n");
 	messager = (MessageThread *) mem_allocator.alloc(sizeof(MessageThread));
 	messager->init(_thd_id);
 	while (!simulation->is_setup_done()) {

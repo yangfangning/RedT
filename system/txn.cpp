@@ -300,7 +300,7 @@ void Transaction::release_inserts(uint64_t thd_id) {
 }
 
 void Transaction::release(uint64_t thd_id) {
-	DEBUG("Transaction release\n");
+	DEBUG_T("Transaction release\n");
 	release_accesses(thd_id);
 	DEBUG_M("Transaction::release array accesses free\n")
 	accesses.release();
@@ -477,7 +477,7 @@ RC TxnManager::commit(yield_func_t &yield, uint64_t cor_id) {
 // 	if(aborted) return Abort;
 // #endif
 	assert(!aborted);
-	DEBUG("Commit %ld\n",get_txn_id());
+	DEBUG_T("Commit %ld\n",get_txn_id());
 
 	release_locks(yield, RCOK, cor_id);
 #if CLV == CLV1
@@ -511,7 +511,7 @@ RC TxnManager::abort(yield_func_t &yield, uint64_t cor_id) {
     inout_table.set_state(get_thd_id(), get_txn_id(), SSI_ABORTED);
     inout_table.clear_Conflict(get_thd_id(), get_txn_id());
 #endif
-	DEBUG("Abort %ld\n",get_txn_id());
+	DEBUG_T("Abort %ld\n",get_txn_id());
 	//printf("Abort %ld\n",get_txn_id());
 	txn->rc = Abort;
 	INC_STATS(get_thd_id(),total_txn_abort_cnt,1);
@@ -559,7 +559,7 @@ RC TxnManager::start_abort(yield_func_t &yield, uint64_t cor_id) {
 	INC_STATS(get_thd_id(), trans_process_time, process_time_span);
     INC_STATS(get_thd_id(), trans_process_count, 1);
 	txn->rc = Abort;
-	DEBUG("%ld start_abort\n",get_txn_id());
+	DEBUG_T("%ld start_abort\n",get_txn_id());
 	// printf("%ld start_abort\n",get_txn_id());
 	uint64_t finish_start_time = get_sys_clock();
 	txn_stats.finish_start_time = finish_start_time;
@@ -615,7 +615,7 @@ RC TxnManager::start_commit(yield_func_t &yield, uint64_t cor_id) {
 	INC_STATS(get_thd_id(), trans_process_time, process_time_span);
   	INC_STATS(get_thd_id(), trans_process_count, 1);
 	RC rc = RCOK;
-	DEBUG("%ld start_commit RO?%d\n",get_txn_id(),query->readonly());
+	DEBUG_T("%ld start_commit RO?%d\n",get_txn_id(),query->readonly());
 	// printf("%ld start_commit RO?%d\n",get_txn_id(),query->readonly());
 
 #if USE_REPLICA
@@ -722,7 +722,7 @@ RC TxnManager::start_commit(yield_func_t &yield, uint64_t cor_id) {
 			rc = commit(yield, cor_id);
 		}else {
 			txn->rc = Abort;
-			DEBUG("%ld start_abort\n",get_txn_id());
+			DEBUG_T("%ld start_abort\n",get_txn_id());
 // #if CO_LOG
 // 			send_colog_messages();
 // 			rc = WAIT_REM;
@@ -846,7 +846,7 @@ void TxnManager::send_prepare_messages() {
 #endif
 	rsp_cnt = query->partitions_touched.size() - 1;
 
-	DEBUG("%ld Send PREPARE messages to %d\n",get_txn_id(),rsp_cnt);
+	DEBUG_T("%ld Send PREPARE messages to %d\n",get_txn_id(),rsp_cnt);
 	for(uint64_t i = 0; i < query->partitions_touched.size(); i++) {
 	if(GET_NODE_ID(query->partitions_touched[i]) == g_node_id) continue;
 		msg_queue.enqueue(get_thd_id(), Message::create_message(this, RPREPARE),
@@ -1169,9 +1169,9 @@ void TxnManager::commit_stats() {
 	INC_STATS(get_thd_id(),total_txn_commit_cnt,1);
 
 	uint64_t warmuptime = get_sys_clock() - simulation->run_starttime;
-	DEBUG("Commit_stats execute_time %ld warmup_time %ld\n",warmuptime,g_warmup_timer);
+	DEBUG_T("Commit_stats execute_time %ld warmup_time %ld\n",warmuptime,g_warmup_timer);
 	if (simulation->is_warmup_done())
-		DEBUG("Commit_stats total_txn_commit_cnt %ld\n",stats._stats[get_thd_id()]->total_txn_commit_cnt);
+		DEBUG_T("Commit_stats total_txn_commit_cnt %ld\n",stats._stats[get_thd_id()]->total_txn_commit_cnt);
 	if(!IS_LOCAL(get_txn_id()) && (CC_ALG != CALVIN)) {
 		INC_STATS(get_thd_id(),remote_txn_commit_cnt,1);
 		txn_stats.commit_stats(get_thd_id(), get_txn_id(), get_batch_id(), timespan_long,
@@ -1338,7 +1338,7 @@ void TxnManager::cleanup_row(yield_func_t &yield, RC rc, uint64_t rid, vector<ve
 #if CC_ALG != CALVIN
 #if ISOLATION_LEVEL != READ_UNCOMMITTED
 	row_t * orig_r = txn->accesses[rid]->orig_row;
-	DEBUG("txn %ld cleanup_row: %lx\n", get_txn_id(),(uint64_t)orig_r);
+	DEBUG_T("txn %ld cleanup_row: %lx\n", get_txn_id(),(uint64_t)orig_r);
 	//如果回滚，且为单版本的话
 
   	if (ROLL_BACK && type == XP &&
@@ -1392,7 +1392,7 @@ void TxnManager::cleanup(yield_func_t &yield, RC rc, uint64_t cor_id) {
 	assert((WORKLOAD == YCSB && row_cnt <= g_req_per_query) || (WORKLOAD == TPCC && row_cnt <=
 	g_max_items_per_txn*2 + 3));
 
-	DEBUG("Cleanup %ld %ld\n",get_txn_id(),row_cnt);
+	DEBUG_T("Cleanup %ld %ld\n",get_txn_id(),row_cnt);
 
 	vector<vector<uint64_t>> remote_access(g_node_cnt); //for DBPA, collect remote abort write
 	for (int rid = row_cnt - 1; rid >= 0; rid --) {
@@ -1407,7 +1407,7 @@ void TxnManager::cleanup(yield_func_t &yield, RC rc, uint64_t cor_id) {
 		//这里通过事务id找到这个事务，这个事务一定还在事务表中，如果事务的回滚次数还能对上，并且该事务的inconflict还是大于0的，就设为-1
 		
 		if(rc == RCOK){
-			DEBUG("txn %ld clean onconflict co %ld \n", this->get_txn_id(), oncof->txn_id);
+			DEBUG_T("txn %ld clean onconflict co %ld \n", this->get_txn_id(), oncof->txn_id);
 			txn_table.clear_onconflict_co(this->get_thd_id(),oncof->txn_id, 0, oncof->abort_cnt);
 		}else{
 			txn_table.clear_onconflict_xp(this->get_thd_id(),oncof->txn_id, 0, oncof->abort_cnt);
@@ -1451,7 +1451,7 @@ RC TxnManager::get_row(yield_func_t &yield,row_t * row, access_t type, row_t *& 
 	uint64_t timespan;
 	RC rc = RCOK;
 	DEBUG_M("TxnManager::get_row access alloc\n");
-	DEBUG("get_row:orig_row: %lx\n", (uint64_t)row);
+	DEBUG_T("txn %ld get_row:orig_row: %lx\n",this->get_txn_id(), (uint64_t)row);
 	Access * access = NULL;
 	this->last_row = row;
 	this->last_type = type;
@@ -1467,7 +1467,7 @@ RC TxnManager::get_row(yield_func_t &yield,row_t * row, access_t type, row_t *& 
 
   	uint64_t middle_time = get_sys_clock();
 	if (rc == Abort || rc == WAIT) {
-		DEBUG("txn %ld conflict in %lx\n",get_txn_id(), (uint64_t)row);
+		DEBUG_T("txn %ld conflict in %lx\n",get_txn_id(), (uint64_t)row);
 		row_rtn = NULL;
 		DEBUG_M("TxnManager::get_row(abort) access free\n");
 		access_pool.put(get_thd_id(),access);
@@ -1559,7 +1559,7 @@ RC TxnManager::get_row_post_wait(row_t *& row_rtn) {
 	if (type == WR) {
 		uint64_t part_id = row->get_part_id();
 		//printf("alloc 10 %ld\n",get_txn_id());
-		DEBUG("TxnManager::get_row_post_wait row_t alloc\n")
+		DEBUG_T("TxnManager::get_row_post_wait row_t alloc\n")
 		row_pool.get(get_thd_id(),access->orig_data);
 		access->orig_data->init(row->get_table(), part_id, 0);
 		access->orig_data->copy(row);
@@ -1705,7 +1705,7 @@ RC TxnManager::send_remote_reads() {
 	for(uint64_t i = 0; i < query->active_nodes.size(); i++) {
 		if (i == g_node_id) continue;
 	if(query->active_nodes[i] == 1) {
-		DEBUG("(%ld,%ld) send_remote_read to %ld\n",get_txn_id(),get_batch_id(),i);
+		DEBUG_T("(%ld,%ld) send_remote_read to %ld\n",get_txn_id(),get_batch_id(),i);
 #if USE_RDMA == CHANGE_MSG_QUEUE
         tport_man.rdma_thd_send_msg(get_thd_id(), i, Message::create_message(this,RFWD));
 #else

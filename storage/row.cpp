@@ -300,7 +300,7 @@ RC row_t::get_row(yield_func_t &yield,access_t type, TxnManager *txn, Access *ac
 	txn->cur_row->init(get_table(), this->get_part_id());
 	assert(txn->cur_row->get_schema() == this->get_schema());
 #elif CC_ALG == MV_NO_WAIT || CC_ALG == MV_WOUND_WAIT
-	DEBUG("row_t::get_row MV alloc \n");
+	DEBUG_T("row_t::get_row MV alloc \n");
 	INC_STATS(txn->get_thd_id(), trans_cur_row_init_time, get_sys_clock() - init_time);
 	lock_t lt = (type == RD || type == SCAN) ? DLOCK_SH : DLOCK_EX; 
 	rc = this->manager->access(txn, lt, NULL);
@@ -353,12 +353,12 @@ RC row_t::get_row(yield_func_t &yield,access_t type, TxnManager *txn, Access *ac
 	//找到了！！！多版本，对于写操作，会创建一个新的行
 	if (rc != Abort && (CC_ALG == MVCC || CC_ALG == SSI || CC_ALG == MV_NO_WAIT || CC_ALG == MV_WOUND_WAIT) && type == WR) {
 		DEBUG_T("row_t::get_row MVCC alloc \n");
-		DEBUG("access->data: %lx\n",(uint64_t)access->data);
+		DEBUG_T("txn %ld access->data: %lx\n",txn->get_txn_id(),(uint64_t)access->data);
 		row_t * newr = (row_t *) mem_allocator.alloc(row_t::get_row_size(tuple_size));
 		newr->init(this->get_table(), get_part_id());
 		newr->copy(access->data);
 		access->data = newr;
-		DEBUG("newr: %lx\n",(uint64_t)newr);
+		DEBUG_T("txn %ld newr: %lx\n",txn->get_txn_id(),(uint64_t)newr);
 	}
 	INC_STATS(txn->get_thd_id(), trans_cur_row_copy_time, get_sys_clock() - copy_time);
 	goto end;
@@ -517,16 +517,16 @@ uint64_t row_t::return_row(RC rc, access_t type, TxnManager * txn, row_t * row) 
 #elif CC_ALG == MV_WOUND_WAIT || CC_ALG == MV_NO_WAIT
 
 	if (type == RD || type == SCAN) {
-		DEBUG("rd/scan txn co/xp\n");
+		DEBUG_T("rd/scan txn co/xp\n");
 		//什么也不干，读操作不需要释放访问的行，也不会有事务依赖于该事务
 		//这里在clv1不用操作，因为不会依赖于任何事物，在clv2或者3，应该要有判断是否可以提交，或者这个活应该放到退休里去干
 	}else if (type == XP) {//回滚操作的话，需要将事务获取的行释放，然后执行回滚操作
 		row->free_row();
-		DEBUG("row_t::return_row XP free \n");
+		DEBUG_T("row_t::return_row XP free \n");
 		mem_allocator.free(row, row_t::get_row_size(ROW_DEFAULT_SIZE));
 		this->manager->lock_release(txn, XP1);
 	} else if (type == WR) {//提交的话，对这行调用提交操作
-		DEBUG("row_t::return_row WR\n");
+		DEBUG_T("row_t::return_row WR\n");
 		assert (type == WR && row != NULL);
 		assert (row->get_schema() == this->get_schema());
 #if CLV == CLV1

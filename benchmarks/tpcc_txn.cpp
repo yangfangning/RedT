@@ -84,7 +84,7 @@ RC TPCCTxnManager::run_txn(yield_func_t &yield, uint64_t cor_id) {
 #endif
 
 	if(IS_LOCAL(txn->txn_id) && (state == TPCC_PAYMENT0 || state == TPCC_NEWORDER0) && txn->rc != Abort) {
-		DEBUG("Running txn %ld\n",txn->txn_id);
+		DEBUG_T("Running txn %ld\n",txn->txn_id);
 #if DISTR_DEBUG
 		query->print();
 #endif
@@ -105,7 +105,7 @@ RC TPCCTxnManager::run_txn(yield_func_t &yield, uint64_t cor_id) {
 #endif		
 	}
 	if (rc!= WAIT){
-    	DEBUG("finish read_write\n");
+    	DEBUG_T("finish read_write\n");
     	this->finish_read_write = true;
   	}
 	if(rc == Abort) total_num_atomic_retry++;
@@ -402,12 +402,12 @@ RC TPCCTxnManager::send_remote_subtxn() {
 		}
 	}
 	rsp_cnt = query->partitions_touched.size() - 1;
-	DEBUG("txn %d partitions_touched %d\n", get_txn_id(),query->partitions_touched.size());
+	DEBUG_T("txn %d partitions_touched %d\n", get_txn_id(),query->partitions_touched.size());
 	for(int i = 0; i < g_node_cnt; i++) {
 		if(i != g_node_id && remote_node[i].size() > 0) {//send message to all masters
 			// printf("%d \n",remote_node[i].size());
 			msg_queue.enqueue(get_thd_id(),Message::create_message(this,RQRY),i);
-			DEBUG("txn %d send subtxn to %d\n", get_txn_id(),i);
+			DEBUG_T("txn %d send subtxn to %d\n", get_txn_id(),i);
 		}
 	}
 	return rc;

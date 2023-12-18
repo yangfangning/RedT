@@ -40,7 +40,7 @@ uint64_t AbortQueue::enqueue(uint64_t thd_id, uint64_t txn_id, TxnManager* txn, 
   uint64_t mtx_time_start = get_sys_clock();
   pthread_mutex_lock(&mtx);
   INC_STATS(thd_id,mtx[0],get_sys_clock() - mtx_time_start);
-  DEBUG("AQ Enqueue %ld %f -- %f\n", entry->txn_id, float(penalty - starttime) / BILLION,
+  DEBUG_T("AQ Enqueue %ld %f -- %f\n", entry->txn_id, float(penalty - starttime) / BILLION,
         simulation->seconds_from_start(starttime));
   INC_STATS(thd_id,abort_queue_penalty,penalty - starttime);
   INC_STATS(thd_id,abort_queue_enqueue_cnt,1);
@@ -63,7 +63,7 @@ void AbortQueue::process(uint64_t thd_id) {
     entry = queue.top();
     if(entry->penalty_end < starttime) {
       queue.pop();
-      DEBUG("AQ Dequeue %ld %f -- %f\n", entry->txn_id,
+      DEBUG_T("AQ Dequeue %ld %f -- %f\n", entry->txn_id,
             float(starttime - entry->penalty_end) / BILLION,
             simulation->seconds_from_start(starttime));
       INC_STATS(thd_id,abort_queue_penalty_extra,starttime - entry->penalty_end);

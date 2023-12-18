@@ -66,7 +66,7 @@ void WorkerThread::statqueue(uint64_t thd_id, Message * msg, uint64_t starttime)
 void WorkerThread::process(yield_func_t &yield, Message * msg, uint64_t cor_id) {
   RC rc __attribute__ ((unused));
 
-  DEBUG("%ld Processing %ld %d\n",get_thd_id(),msg->get_txn_id(),msg->get_rtype());
+  DEBUG_T("%ld Processing %ld %d\n",get_thd_id(),msg->get_txn_id(),msg->get_rtype());
   assert(msg->get_rtype() == CL_QRY || msg->get_rtype() == CL_QRY_O || msg->get_txn_id() != UINT64_MAX);
   uint64_t starttime = get_sys_clock();
 		switch(msg->get_rtype()) {
@@ -158,7 +158,7 @@ void WorkerThread::process(yield_func_t &yield, Message * msg, uint64_t cor_id) 
   INC_STATS(get_thd_id(),worker_process_time,timespan);
   INC_STATS(get_thd_id(),worker_process_cnt_by_type[msg->rtype],1);
   INC_STATS(get_thd_id(),worker_process_time_by_type[msg->rtype],timespan);
-  DEBUG("%ld EndProcessing %d %ld\n",get_thd_id(),msg->get_rtype(),msg->get_txn_id());
+  DEBUG_T("%ld EndProcessing %d %ld\n",get_thd_id(),msg->get_rtype(),msg->get_txn_id());
 }
 
 void WorkerThread::check_if_done(RC rc) {

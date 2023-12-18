@@ -62,7 +62,7 @@ void MessageThread::send_batch(uint64_t dest_node_id) {
 	  ((uint32_t*)sbuf->buffer)[2] = sbuf->cnt;
     INC_STATS(_thd_id,mbuf_send_intv_time,get_sys_clock() - sbuf->starttime);
 
-    DEBUG("Send batch of %ld msgs to %ld\n",sbuf->cnt,dest_node_id);
+    DEBUG_T("Send batch of %ld msgs to %ld\n",sbuf->cnt,dest_node_id);
     fflush(stdout);
     sbuf->set_send_time(get_sys_clock());
     tport_man.send_msg(_thd_id,dest_node_id,sbuf->buffer,sbuf->ptr);
@@ -508,7 +508,7 @@ void MessageThread::run() {
 #endif
 
   sbuf = buffer[dest_node_id];
-  DEBUG("sbuf.ptr %ld msg.size %ld sbuf.cnt %d\n", sbuf->ptr, msg->get_size(), sbuf->cnt);
+  //DEBUG("sbuf.ptr %ld msg.size %ld sbuf.cnt %d\n", sbuf->ptr, msg->get_size(), sbuf->cnt);
 
   if(!sbuf->fits(msg->get_size())) {
     assert(sbuf->cnt > 0);
