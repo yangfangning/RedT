@@ -513,13 +513,13 @@ do
         if [[ "${cc}" == 'MVCC' ]]
         then
         alg_tmpresult=$(python pl/parse_latency_mvcc.py $AS)
-        bath draw_latency.sh ${cc} "$tmpresult" "$alg_tmpresult"
+        bash draw_latency.sh ${cc} "$tmpresult" "$alg_tmpresult"
         elif [[ "${cc}" == 'DLI_OCC' ]] || [[ "${cc}" == 'DLI_DTA3' ]] || [[ "${cc}" == 'DLI_DTA' ]] || [[ "${cc}" == 'DLI_DTA2' ]]
         then
         alg_tmpresult=$(python pl/parse_latency_dli.py $AS)
-        bath draw_latency.sh ${cc} "$tmpresult" "$alg_tmpresult"
+        bash draw_latency.sh ${cc} "$tmpresult" "$alg_tmpresult"
         else
-        bath draw_latency.sh ${cc} "$tmpresult"
+        bash draw_latency.sh ${cc} "$tmpresult"
         fi
         dot -Tjpg draw_latency_tmp.dot -o draw_latency_${cc}_${arg}.jpg
         mv draw_latency_${cc}_${arg}.jpg ${RESULT_PATH}/

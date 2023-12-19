@@ -558,9 +558,9 @@ def ycsb_tapir_skew():
 
 def ycsb_skew():
     wl = 'YCSB'
-    nnodes = [8]
+    nnodes = [3]
 
-    algos=['NO_WAIT']
+    algos=['MV_NO_WAIT']
     tapir=['false']
     early=['false']
     # base_table_size=1048576*10
@@ -571,7 +571,7 @@ def ycsb_skew():
     tup_write_perc = [0.5]
     load = [320] #node_cnt*tcnt
 
-    tcnt = [40]  #THREAD_CNT
+    tcnt = [4]  #THREAD_CNT
     # skew = [0.0,0.2,0.4,0.5]
     skew = [0.6,0.65,0.7,0.75,0.8,0.85,0.9]
     fmt = ["WORKLOAD","NODE_CNT","CC_ALG","SYNTH_TABLE_SIZE","TUP_WRITE_PERC","TXN_WRITE_PERC","MAX_TXN_IN_FLIGHT","USE_TAPIR","EARLY_PREPARE","ZIPF_THETA","THREAD_CNT"]
@@ -1319,8 +1319,8 @@ experiment_map = {
 # Default values for variable configurations
 configs = {
     "NODE_CNT" : 5,
-    "CENTER_CNT": 4,
-    "THREAD_CNT": 24,
+    "CENTER_CNT": 1,
+    "THREAD_CNT": 4,
     "REPLICA_CNT": 0,
     "REPLICA_TYPE": "AP",
     "REM_THREAD_CNT": 1,

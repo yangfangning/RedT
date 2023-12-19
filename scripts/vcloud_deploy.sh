@@ -16,20 +16,20 @@ for HOSTNAME in ${HOSTS}; do
     #删除同名文件
     ssh -n -o BatchMode=yes -o StrictHostKeyChecking=no -l ${USERNAME} ${USERNAME}@${HOSTNAME} "rm -rf /tmp/${USERNAME}_* ${USERNAME} ${count}" &
 done
-# bath ntptime.sh
+# bash ntptime.sh
 
 if [[ $DC_COUNT -ne 0 ]]
 then
 #清理网络规则
-    bath clean_group_delay.sh
-    bath set_group_delay.sh 0 $DC_COUNT
+    bash clean_group_delay.sh
+    bash set_group_delay.sh 0 $DC_COUNT
 fi
 
 #不等于0
 if [[ $LATENCY -ne 0 ]] 
 then
 #修改网络延迟
-    bath reset_group_delay.sh $LATENCY $LATENCY_RANGE
+    bash reset_group_delay.sh $LATENCY $LATENCY_RANGE
 fi
 
 for HOSTNAME in ${HOSTS}; do
@@ -66,4 +66,4 @@ do
 done
 
 
-bath reset_group_delay.sh 0 0
+bash reset_group_delay.sh 0 0
