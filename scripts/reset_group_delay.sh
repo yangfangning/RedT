@@ -7,10 +7,10 @@ do
     # then
     if [[ $RANGE -eq 0 ]]
     then 
-        ssh 192.168.10.$i "sudo tc qdisc change dev ib0 parent 1:5 handle 50: netem delay ${DELAY}ms"
+        ssh 172.20.242.$i "sudo tc qdisc change dev eth0 parent 1:5 handle 50: netem delay ${DELAY}ms"
     else
-        ssh 192.168.10.$i "sudo tc qdisc change dev ib0 parent 1:5 handle 50: netem delay ${DELAY}ms ${RANGE}ms distribution normal"
+        ssh 172.20.242.$i "sudo tc qdisc change dev eth0 parent 1:5 handle 50: netem delay ${DELAY}ms ${RANGE}ms distribution normal"
     fi
-    # ssh 192.168.10.$i "sudo tc qdisc change dev ib0 parent 1:5 handle 50: netem delay ${DELAY}ms"
+    # ssh 172.20.242.$i "sudo tc qdisc change dev eth0 parent 1:5 handle 50: netem delay ${DELAY}ms"
     # fi
 done

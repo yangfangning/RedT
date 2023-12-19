@@ -624,9 +624,9 @@ def ycsb_tapir_writes():
 
 def ycsb_writes():
     wl = 'YCSB'
-    nnodes = [8]
+    nnodes = [3]
 
-    algos=['NO_WAIT']
+    algos=['MV_NO_WAIT']
     tapir=['false']
     early=['false']
     base_table_size=1048576

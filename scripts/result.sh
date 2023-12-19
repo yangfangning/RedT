@@ -426,7 +426,7 @@ addContent "<img src=\"./1tpmc.svg\" />"
 echo >> ${LATFILE}
 echo "abort_time txn_manager_time txn_validate_time txn_cleanup_time txn_total_process_time" >> ${LATFILE}
 awk -F' ' '{for(i=1;i<=NF;i=i+1){a[NR,i]=$i}}END{for(j=1;j<=NF;j++){str=a[1,j];for(i=2;i<=NR;i++){str=str " " a[i,j]}print str}}' ${LTFILE} >> ${LATFILE}
-/data1/deneva/anaconda3/bin/python3 getLATENCY.py ${LATFILE} ${PHASE}
+python3 getLATENCY.py ${LATFILE} ${PHASE}
 mv 1.png ${RESULT_PATH}/
 addHeading 2 "时间使用占比分析图"
 addContent "<img src=\"./1.png\" />"
@@ -513,13 +513,13 @@ do
         if [[ "${cc}" == 'MVCC' ]]
         then
         alg_tmpresult=$(python pl/parse_latency_mvcc.py $AS)
-        sh draw_latency.sh ${cc} "$tmpresult" "$alg_tmpresult"
+        bath draw_latency.sh ${cc} "$tmpresult" "$alg_tmpresult"
         elif [[ "${cc}" == 'DLI_OCC' ]] || [[ "${cc}" == 'DLI_DTA3' ]] || [[ "${cc}" == 'DLI_DTA' ]] || [[ "${cc}" == 'DLI_DTA2' ]]
         then
         alg_tmpresult=$(python pl/parse_latency_dli.py $AS)
-        sh draw_latency.sh ${cc} "$tmpresult" "$alg_tmpresult"
+        bath draw_latency.sh ${cc} "$tmpresult" "$alg_tmpresult"
         else
-        sh draw_latency.sh ${cc} "$tmpresult"
+        bath draw_latency.sh ${cc} "$tmpresult"
         fi
         dot -Tjpg draw_latency_tmp.dot -o draw_latency_${cc}_${arg}.jpg
         mv draw_latency_${cc}_${arg}.jpg ${RESULT_PATH}/

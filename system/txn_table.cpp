@@ -220,7 +220,6 @@ void TxnTable::clear_onconflict_co(uint64_t thd_id, uint64_t txn_id, uint64_t ba
       if(t_node->txn_man->abort_cnt == abort_cnt && t_node->txn_man->inconflict > 0){
         DEBUG_T("txn %ldinconflict: %d need become -1\n",txn_id,t_node->txn_man->inconflict);
         t_node->txn_man->decr_pr();
-        assert(t_node->txn_man->inconflict >= 0);
         if(t_node->txn_man->inconflict == 0){
           //对于提交的事务，只有后续事务的依赖降到0才会将准备返回prepare变为true
           ATOM_CAS(t_node->txn_man->prep_ready, false, true);

@@ -1,15 +1,15 @@
 
-# sh set_delay.sh 10
-# sh set_delay.sh 20 5 5 0 #40
+# bath set_delay.sh 10
+# bath set_delay.sh 20 5 5 0 #40
 # python run_experiments.py -e -c vcloud ycsb_thread
 # sleep 30
 # python run_experiments.py -e -c vcloud ycsb_skew
 # sleep 30
 python run_experiments.py -e -c vcloud ycsb_cross_dc
-# sh set_delay.sh 20
+# bath set_delay.sh 20
 # python run_experiments.py -e -c vcloud ycsb_cross_dc
 # sleep 30
-# sh set_delay.sh 40
+# bath set_delay.sh 40
 # python run_experiments.py -e -c vcloud ycsb_cross_dc
 # sleep 30
 python run_experiments.py -e -c vcloud ycsb_tapir_cross_dc
@@ -18,7 +18,7 @@ python run_experiments.py -e -c vcloud ycsb_tapir_cross_dc
 # sleep 30
 # python run_experiments.py -e -c vcloud ycsb_tapir_writes
 # sleep 30
-# sh testdelay.sh
+# bath testdelay.sh
 # python run_experiments.py -e -c vcloud tpcc_scaling
 # sleep 3
 # python run_experiments.py -e -c vcloud tpcc_scaling_n
