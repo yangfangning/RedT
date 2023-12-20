@@ -396,12 +396,12 @@ do
             AS=${AS}$(readlink -f ${RESULT_PATH}/$f)" "
             LS=${LS}$(readlink -f ${RESULT_PATH}/$f)" "
         done
-        tmpresult=$(python parse_results.py $AS)
+        tmpresult=$(python3 parse_results.py $AS)
         echo ${tmpresult} >> ${TMPFILE}
-        dis_tmpresult=$(python pl/parse_latency_dis.py $AS)
+        dis_tmpresult=$(python3 pl/parse_latency_dis.py $AS)
         echo ${dis_tmpresult} >> ${DIS_FILE}
-        python parse_latency.py $AS >> ${CCLATFILE}
-        python parse_cpu_idle.py $AS >> ${IDLEFILE}
+        python3 parse_latency.py $AS >> ${CCLATFILE}
+        python3 parse_cpu_idle.py $AS >> ${IDLEFILE}
         tput=$(echo ${tmpresult} | awk '{print $1}')
         ar=$(echo ${tmpresult} | awk '{print $2}')
         dr=$(echo ${tmpresult} | awk '{print $3}')
@@ -412,7 +412,7 @@ do
         
     done
     let num++
-    python parse_trans_latency.py $LS >> ${LTFILE}
+    python3 parse_trans_latency.py $LS >> ${LTFILE}
     mv ${DIS_FILE} ${RESULT_PATH}/
     mv ${TMPFILE} ${RESULT_PATH}/
     mv ${CPUFILE} ${RESULT_PATH}/
@@ -499,7 +499,7 @@ do
             AS=${AS}$(readlink -f ${RESULT_PATH}/$f)" "
             LS=${LS}$(readlink -f ${RESULT_PATH}/$f)" "
         done
-        tmpresult=$(python parse_latency.py $AS)
+        tmpresult=$(python3 parse_latency.py $AS)
         OLD_IFS="$IFS"
         IFS=" "
         tmpr=($tmpresult)
@@ -512,11 +512,11 @@ do
         done
         if [[ "${cc}" == 'MVCC' ]]
         then
-        alg_tmpresult=$(python pl/parse_latency_mvcc.py $AS)
+        alg_tmpresult=$(python3 pl/parse_latency_mvcc.py $AS)
         bash draw_latency.sh ${cc} "$tmpresult" "$alg_tmpresult"
         elif [[ "${cc}" == 'DLI_OCC' ]] || [[ "${cc}" == 'DLI_DTA3' ]] || [[ "${cc}" == 'DLI_DTA' ]] || [[ "${cc}" == 'DLI_DTA2' ]]
         then
-        alg_tmpresult=$(python pl/parse_latency_dli.py $AS)
+        alg_tmpresult=$(python3 pl/parse_latency_dli.py $AS)
         bash draw_latency.sh ${cc} "$tmpresult" "$alg_tmpresult"
         else
         bash draw_latency.sh ${cc} "$tmpresult"

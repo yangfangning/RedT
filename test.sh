@@ -34,7 +34,7 @@ done
 
 ssh -t -p22 root@10.77.110.147  << remotessh
             cd /root/zzhdeneva/test
-            python output-gather.py > output.txt
+            python3 output-gather.py > output.txt
             exit
 remotessh
 
