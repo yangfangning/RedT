@@ -1,5 +1,4 @@
 #!/bin/bash
-
 LOCAL_UNAME="$5"
 USERNAME="$5"
 HOSTS="$1"
@@ -12,8 +11,6 @@ DC_COUNT="$6"
 LATENCY="$7"
 LATENCY_RANGE="$8"
 for HOSTNAME in ${HOSTS}; do
-    # scp cpu_monitor.sh ${USERNAME}@${HOSTNAME}:${PATHE}
-    #删除同名文件
     ssh -n -o BatchMode=yes -o StrictHostKeyChecking=no -l ${USERNAME} ${USERNAME}@${HOSTNAME} "rm -rf /tmp/${USERNAME}_* ${USERNAME} ${count}" &
 done
 # bash ntptime.sh

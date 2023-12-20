@@ -560,7 +560,7 @@ def ycsb_skew():
     wl = 'YCSB'
     nnodes = [3]
 
-    algos=['MV_NO_WAIT']
+    algos=['NO_WAIT']
     tapir=['false']
     early=['false']
     # base_table_size=1048576*10
@@ -573,7 +573,7 @@ def ycsb_skew():
 
     tcnt = [4]  #THREAD_CNT
     # skew = [0.0,0.2,0.4,0.5]
-    skew = [0.6,0.65,0.7,0.75,0.8,0.85,0.9]
+    skew = [0.6]
     fmt = ["WORKLOAD","NODE_CNT","CC_ALG","SYNTH_TABLE_SIZE","TUP_WRITE_PERC","TXN_WRITE_PERC","MAX_TXN_IN_FLIGHT","USE_TAPIR","EARLY_PREPARE","ZIPF_THETA","THREAD_CNT"]
     exp = [[wl,n,algo,base_table_size*n,tup_wr_perc,txn_wr_perc,ld,ir,er,sk,thr] for thr,txn_wr_perc,tup_wr_perc,ld,n,sk,algo,ir,er in itertools.product(tcnt,txn_write_perc,tup_write_perc,load,nnodes,skew,algos,tapir,early)]
     return fmt,exp

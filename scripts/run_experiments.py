@@ -223,13 +223,15 @@ for exp in exps:
                         print (cmd)
                         os.system(cmd)
                     elif cluster == 'vcloud':
-                        #运行rundb和runcl后，会将输出输出到这个文件，将这个文件复制到本地并重命名
-                        cmd = 'scp {}:/{}/dbresults{}.out results/{}/{}_{}.out'.format(m,uname,n,strnow,n,output_f)
-                        print (cmd)
-                        os.system(cmd)
-                        # cmd = 'scp {}:/tmp/{}* {}/'.format(m,uname2,cpu_usage_path)
-                        # print (cmd)
-                        # os.system(cmd)
+                        if n >= cfgs["NODE_CNT"]:
+                            #运行rundb和runcl后，会将输出输出到这个文件，将这个文件复制到本地并重命名
+                            cmd = 'scp {}:/{}/clresults{}.out results/{}/{}_{}.out'.format(m,uname,n,strnow,n,output_f)
+                            print (cmd)
+                            os.system(cmd)
+                        else:
+                            cmd = 'scp {}:/{}/dbresults{}.out results/{}/{}_{}.out'.format(m,uname,n,strnow,n,output_f)
+                            print (cmd)
+                            os.system(cmd)
 
             else:
                 nnodes = cfgs["NODE_CNT"]
