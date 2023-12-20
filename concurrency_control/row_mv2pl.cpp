@@ -113,7 +113,7 @@ RC Row_mv2pl::access(TxnManager * txn, lock_t type, row_t * row) {
                 if(owner->txn->get_prepare_timestamp() <= start_ts){
                     DEBUG_T("txn %ld need wait %ld co/xp\n", txn->get_txn_id(),owner->txn->get_txn_id());
                     Mv2plEntry * entry = create_2pl_entry();
-                    entry->start_ts = get_sys_clock();
+                    entry->start_ts = start_ts;
                     entry->txn = txn;
                     entry->type = type;
                     Mv2plEntry * en;
@@ -190,7 +190,7 @@ RC Row_mv2pl::access(TxnManager * txn, lock_t type, row_t * row) {
 #endif
                 }
                 Mv2plEntry * entry = create_2pl_entry();
-                entry->start_ts = get_sys_clock();
+                entry->start_ts = start_ts;
                 entry->txn = txn;
                 entry->type = type;
                 Mv2plEntry * en;
@@ -248,7 +248,7 @@ RC Row_mv2pl::access(TxnManager * txn, lock_t type, row_t * row) {
             DEBUG_T("no owner, txn %ld is owner\n", txn->get_txn_id());     
             Mv2plEntry * entry = create_2pl_entry();
             entry->type = type;
-            entry->start_ts = get_sys_clock();
+            entry->start_ts = start_ts;
             entry->txn = txn;
             owner = entry;
             row_t * ret = (writehistail == NULL) ? _row : writehistail->row;
@@ -368,7 +368,7 @@ void Row_mv2pl::lock_release(TxnManager * txn, lock_t type){
                 entry->txn->txn_stats.cc_block_time_short += timespan;
                 INC_STATS(txn->get_thd_id(), twopl_wait_time, timespan);
                 //设置唤醒后事务的要获取的行数据，快照读数据
-                ts_t ts = entry->txn->get_start_timestamp();
+                ts_t ts = entry->start_ts;
                 Mv2plhisEntry * whis =  writehistail;
                 while (whis != NULL && whis->ts > ts) {
                     whis = whis->next;
@@ -470,7 +470,7 @@ void Row_mv2pl::retire(TxnManager * txn, row_t * row) {
         entry->txn->txn_stats.cc_block_time_short += timespan;
         INC_STATS(txn->get_thd_id(), twopl_wait_time, timespan);
         //设置唤醒后事务的要获取的行数据
-        ts_t ts = entry->txn->get_start_timestamp();
+        ts_t ts = entry->start_ts;
         Mv2plhisEntry * whis =  writehistail;
         while (whis != NULL && whis->ts > ts) {
             whis = whis->next;
