@@ -99,7 +99,7 @@ def ycsb_thread():
     wl = 'YCSB'
     #nnodes = [1,2,4,8,16,32,64]
     #nnodes = [1,2,4,8,16,32]
-    nnodes = [4]
+    nnodes = [3]
     tapir = ['false']
     # algos=['CALVIN','MAAT','MVCC','NO_WAIT','TIMESTAMP','WAIT_DIE']
     algos=['NO_WAIT']
@@ -1318,8 +1318,8 @@ experiment_map = {
 
 # Default values for variable configurations
 configs = {
-    "NODE_CNT" : 5,
-    "CENTER_CNT": 1,
+    "NODE_CNT" : 3,
+    "CENTER_CNT": 3,
     "THREAD_CNT": 4,
     "REPLICA_CNT": 0,
     "REPLICA_TYPE": "AP",
@@ -1356,7 +1356,7 @@ configs = {
     "TXN_WRITE_PERC":0.2,
     "PRIORITY":"PRIORITY_ACTIVE",
     "TWOPL_LITE":"false",
-    "USE_TAPIR":"true",
+    "USE_TAPIR":"false",
     "EARLY_PREPARE":"false",
 #YCSB
     "INIT_PARALLELISM" : 1,

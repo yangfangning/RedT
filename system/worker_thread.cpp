@@ -1241,10 +1241,6 @@ RC WorkerThread::process_rqry(yield_func_t &yield, Message * msg, uint64_t cor_i
 RC WorkerThread::process_rqry_cont(yield_func_t &yield, Message * msg, uint64_t cor_id) {
   DEBUG_T("RQRY_CONT %ld from %ld\n",msg->get_txn_id(),msg->return_node_id);
   assert(!IS_LOCAL(msg->get_txn_id()));
-  if(txn_man->query->partitions_touched.size() == 0) {
-    DEBUG_T("RQRY_CONT skip %ld\n",msg->get_txn_id());
-    return RCOK;
-  }
   RC rc = txn_man->get_rc();
   if(rc != Abort){
     txn_man->run_txn_post_wait();
@@ -1263,10 +1259,6 @@ RC WorkerThread::process_rtxn_cont(yield_func_t &yield, Message * msg, uint64_t 
   assert(IS_LOCAL(msg->get_txn_id()));
 
   txn_man->txn_stats.local_wait_time += get_sys_clock() - txn_man->txn_stats.wait_starttime;
-  if(!txn_man || !(txn_man->txn) || !txn_man->query || txn_man->query->partitions_touched.size() == 0) {
-    DEBUG_T("RTXN_CONT skip %ld\n",msg->get_txn_id());
-    return RCOK;
-  }
   if(txn_man->get_rc() != Abort){
     txn_man->run_txn_post_wait();
   }
