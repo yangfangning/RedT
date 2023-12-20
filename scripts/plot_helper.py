@@ -1,9 +1,9 @@
 import os, sys, re, math, os.path
 import numpy as np
 import operator
-from helper import get_cfgs
+from helper import get_cfgs,get_outfile_name,avg
 from helper import write_summary_file,get_summary_stats
-from draw import *
+from scripts.draw import *
 import types
 import latency_stats as ls
 import pprint
@@ -595,7 +595,7 @@ def tput(xval,vval,summary,summary_cl,
     print(_xval)
 
     # FIXME (Dana): MAAT --> OCC quick fix
-    print tpt.keys()
+    print (tpt.keys())
     if "MAAT" in tpt.keys():
         occ_tput = tpt["MAAT"]
         del tpt["MAAT"]
@@ -1025,7 +1025,7 @@ def tput_mpr(mpr,nodes,algos,max_txn,summary):
                 continue
             tpt[x][i] = (avg_txn_cnt/avg_run_time)
 
-    draw_line(name,tpt,mpr,ylab='Throughput (Txn/sec)',xlab='Multi-Partition Rate',title=_title,bbox=[0.5,0.95],ltitle=vname)
+    draw_line(name,tpt,mpr,ylab='Throughput (Txn/sec)',xlab='Multi-Partition Rate',title=_title,bbox=[0.5,0.95])
 
 # Plots Transport latency vs. MPR
 # mpr: list of MPR values to plot along the x-axis
@@ -1062,7 +1062,7 @@ def tportlat_mpr(mpr,nodes,algos,max_txn,summary):
             avg_tport_lat = avg(summary[cfgs]['tport_lat'])
             tport_lat[x][i] = avg_tport_lat
 
-    draw_line(name,tport_lat,mpr,ylab='Latency (s)',xlab='Multi-Partition Rate',title='Average Message Latency',bbox=[0.5,0.95],ltitle=vname)
+    draw_line(name,tport_lat,mpr,ylab='Latency (s)',xlab='Multi-Partition Rate',title='Average Message Latency',bbox=[0.5,0.95])
 
 def stacks_general(xval,summary,
         keys,
@@ -1944,6 +1944,6 @@ def plot_avg(mpr,nodes,algos,max_txn,summary,value='run_time'):
                 continue
             avgs[x][i] = avg_
 
-    draw_line(name,avgs,mpr,ylab='average ' + value,xlab='Multi-Partition Rate',title='Per Node Throughput',bbox=[0.5,0.95],ltitle=vname)
+    draw_line(name,avgs,mpr,ylab='average ' + value,xlab='Multi-Partition Rate',title='Per Node Throughput',bbox=[0.5,0.95])
 
 

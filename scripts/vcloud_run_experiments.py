@@ -77,9 +77,9 @@ for arg in sys.argv:
 #if not execute:
 #    cmd = "mkdir " + test_dir
 #    os.system(cmd)
-fmt = experiments[0]
+fmt = experiment_map[0]
 
-for e in experiments[1:]:
+for e in experiment_map[1:]:
     cfgs = get_cfgs(fmt,e)
     if remote:
         cfgs["TPORT_TYPE"],cfgs["TPORT_TYPE_IPC"],cfgs["TPORT_PORT"]="\"tcp\"","false",7658
@@ -87,9 +87,9 @@ for e in experiments[1:]:
     output_f = get_outfile_name(cfgs)
     output_dir = output_f + "/"
     output_f = output_f + strnow
-    print output_f
+    print (output_f)
     if len(glob.glob('{}*{}*.out'.format(result_dir,get_outfile_name(cfgs)))) > 0:
-        print "Experiment exists in results folder... skipping"
+        print ("Experiment exists in results folder... skipping")
         continue
 
     f = open("config.h",'r');

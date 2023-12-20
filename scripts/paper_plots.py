@@ -157,7 +157,7 @@ def ppr_ycsb_partitions_abort_plot(summary,summary_cl):
 def ppr_ycsb_writes_plot(summary,summary_cl):
     from experiments import ycsb_writes
     from helper import plot_prep
-    from plot_helper import tput
+    from plot_helper import tput,time_breakdown,latency,abort_rate,latency_breakdown,time_breakdown_line
     nfmt,nexp = ycsb_writes()
     x_name = "TXN_WRITE_PERC"
     v_name = "CC_ALG"

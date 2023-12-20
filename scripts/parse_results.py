@@ -79,6 +79,6 @@ if 'avg_num_msgs_commit' in summary:
 if 'avg_num_rts_commit' in summary:
     u = sum(summary['avg_num_rts_commit'])
 
-print a, b, e, i, j, k, m, n, o, s, t, z, p, q, u
+print (a, b, e, i, j, k, m, n, o, s, t, z, p, q, u)
 # f, g / h
 # print a, b, f, g, h

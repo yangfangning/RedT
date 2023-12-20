@@ -24,4 +24,4 @@ names = summary.keys()
 a0 = sum(summary['avg_trans_total_run_time']) 
 
 #trans_total_run_time trans_process_time trans_process_time% trans_2pc_time trans_2pc_time% trans_prepare_time trans_prepare_time% trans_validate_time trans_validate_time% trans_finish_time trans_finish_time% trans_commit_time trans_commit_time% trans_abort_time trans_abort_time% trans_block_time trans_block_time% txn_index_time txn_index_time% txn_manager_time txn_manager_time% lat_l_loc_cc_time lat_l_loc_cc_time%
-print "%.2f" % (a)
+print ("%.2f" % (a0))

@@ -1,5 +1,5 @@
 import os, sys, re, math, os.path, math
-from helper import get_cfgs
+from helper import *
 from experiments import *
 from plot_helper import *
 import latency_stats as ls
