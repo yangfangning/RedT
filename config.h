@@ -453,7 +453,7 @@ enum PPSTxnType {
 #define DEBUG_SYNTH         false
 #define DEBUG_ASSERT        false
 #define DEBUG_DISTR false
-#define DEBUG_TXN true
+#define DEBUG_TXN false
 #define DEBUG_ALLOC false
 #define DEBUG_RACE false
 #define DEBUG_TIMELINE        false

@@ -279,19 +279,22 @@ RC YCSBTxnManager::run_txn(yield_func_t &yield, uint64_t cor_id) {
 		return WAIT;
 	}
 #endif
-
-	if(!IS_LOCAL(get_txn_id())){
-		if(rc == Abort) rc = abort(yield, cor_id);
-		return rc;
-	}
-
-	if(rc == Abort){
-		rc = start_abort(yield, cor_id);
-	}else{
-		if(rsp_cnt > 0) return WAIT;
-		if(is_done()){
-			rc = start_commit(yield, cor_id);
+	if (rc != Abort) {
+        if (rsp_cnt > 0) {
+            return WAIT;
+		} else {
+			if(IS_LOCAL(get_txn_id())) {
+				INC_STATS(get_thd_id(), trans_read_write_count, 1);
+				INC_STATS(get_thd_id(), trans_read_write_time, get_sys_clock() - start_rw_time);
+				start_logging_time = get_sys_clock();
+			}
 		}
+	}
+	if(IS_LOCAL(get_txn_id())) {
+		if(is_done() && rc == RCOK)
+			rc = start_commit(yield, cor_id);
+		else if(rc == Abort)
+			rc = start_abort(yield, cor_id);
 	}
 
 	return rc;
