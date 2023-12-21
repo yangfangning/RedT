@@ -414,7 +414,7 @@ void Row_mv2pl::lock_release(TxnManager * txn, lock_t type){
         retire_head = retire_head->prev;
 #endif
         max_cts = txn->get_commit_timestamp();
-        //clear_history(txn);
+        clear_history(txn);
     }
     
 
