@@ -162,6 +162,7 @@ RC Row_mv2pl::access(TxnManager * txn, lock_t type, row_t * row) {
         //最大提交时间戳在提交时确定，可见但未提交的不能算，因为有回滚的可能
         if( start_ts < max_retire_cts){
             rc = Abort;
+            txn->set_rc(rc);
             DEBUG_T("txn %ld abort because ts little \n", txn->get_txn_id());
 #if CLV == CLV2 || CLV == CLV3 
             ATOM_CAS(txn->prep_ready, false, true);
@@ -219,6 +220,7 @@ RC Row_mv2pl::access(TxnManager * txn, lock_t type, row_t * row) {
                 //txn->wait_starttime = get_sys_clock();
             }else{
                 rc = Abort;
+                txn->set_rc(rc);
 #if CLV == CLV2 || CLV == CLV3 
             ATOM_CAS(txn->prep_ready, false, true);
             ATOM_CAS(txn->need_prep_cont, true, false);
@@ -231,6 +233,7 @@ RC Row_mv2pl::access(TxnManager * txn, lock_t type, row_t * row) {
 #if CC_ALG == MV_NO_WAIT
 
             rc = Abort;
+            txn->set_rc(rc);
 #if CLV == CLV2 || CLV == CLV3 
             ATOM_CAS(txn->prep_ready, false, true);
             ATOM_CAS(txn->need_prep_cont, true, false);
@@ -491,7 +494,8 @@ void Row_mv2pl::retire(TxnManager * txn, row_t * row) {
         LIST_GET_HEAD(waiters_head,waiters_tail,entry);
         if (entry->txn->get_start_timestamp() < max_retire_cts) {
             entry->txn->set_rc(Abort);
-#if CLV == CLV2 || CLV == CLV3 
+            entry->txn->finish_read_write = true;
+#if CLV == CLV2 || CLV == CLV3
             ATOM_CAS(entry->txn->prep_ready, false, true);
             ATOM_CAS(entry->txn->need_prep_cont, true, false);
             ATOM_CAS(entry->txn->inconflict,entry->txn->inconflict,-1);

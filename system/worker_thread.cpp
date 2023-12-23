@@ -1165,7 +1165,7 @@ RC WorkerThread::process_rqry_rsp(yield_func_t &yield, Message * msg, uint64_t c
   int responses_left = txn_man->received_response(((AckMessage*)msg)->rc);
   assert(responses_left >=0);
   
-  if(!txn_man->aborted && ((QueryResponseMessage*)msg)->rc == Abort) {
+  if(!txn_man->aborted && txn_man->get_rc() == Abort) {
     txn_man->start_abort(yield, cor_id);
   }
   if (responses_left > 0) return WAIT;
@@ -1263,11 +1263,13 @@ RC WorkerThread::process_rtxn_cont(yield_func_t &yield, Message * msg, uint64_t 
     DEBUG_T("RTXN_CONT skip %ld\n",msg->get_txn_id());
     return RCOK;
   }
-  if(txn_man->get_rc() != Abort){
-    txn_man->run_txn_post_wait();
+  if(!txn_man->aborted){
+    if(txn_man->get_rc() != Abort){
+      txn_man->run_txn_post_wait();
+    }
+    RC rc = txn_man->run_txn(yield, cor_id);
+    check_if_done(rc);
   }
-  RC rc = txn_man->run_txn(yield, cor_id);
-  check_if_done(rc);
   return RCOK;
 }
 
