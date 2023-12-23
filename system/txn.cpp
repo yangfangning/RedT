@@ -370,8 +370,9 @@ void TxnManager::reset() {
 	fin_rsp_cnt = 0;
 	log_rsp_cnt = 0;
 	log_fin_rsp_cnt = 0;
-	txn_state = RUNNING;
-	// aborted = false;
+    pre_prepare_cnt = 0;
+    txn_state = RUNNING;
+    // aborted = false;
 	return_id = UINT64_MAX;
 	twopl_wait_start = 0;
 
@@ -628,15 +629,17 @@ RC TxnManager::start_commit(yield_func_t &yield, uint64_t cor_id) {
 //本地事务的状态进入提交阶段中的prepa阶段
 	txn_state = PREPARE;
 #if !USE_TAPIR
-#if CLV == CLV3
-    if(this->query->partitions_touched.size() == 1){
-        this->set_commit_timestamp(this->max_prepare_timestamp);
-        this->retire(yield, cor_id);
-        this->finish_retire = true;
-    }
-#endif
+
 	if(has_local_write()){
-		log_replica(RLOG, g_node_id);
+#if CLV == CLV3
+        pre_prepare_cnt--;
+		if(pre_prepare_cnt == 0){
+			this->set_commit_timestamp(this->max_prepare_timestamp);
+			this->retire(yield, cor_id);
+			this->finish_retire = true;
+		}
+#endif
+        log_replica(RLOG, g_node_id);
 	}
 	if(rsp_cnt != 0 || log_rsp_cnt!=0){
 		return WAIT_REM;
@@ -842,7 +845,7 @@ void TxnManager::send_prepare_messages() {
 	fin_rsp_cnt = 0;
 	log_rsp_cnt = 0;
 	log_fin_rsp_cnt = 0;
-	pre_prepare_cnt = query->partitions_touched.size() - 1;
+	pre_prepare_cnt = query->partitions_modified.size();
 #endif
 	rsp_cnt = query->partitions_touched.size() - 1;
 
@@ -1153,9 +1156,9 @@ int TxnManager::received_log_fin_response(RC rc) {
 	return log_fin_rsp_cnt;
 }
 #if CLV == CLV3
-bool TxnManager::waiting_for_response() { return (rsp_cnt > 0 || fin_rsp_cnt > 0 || log_rsp_cnt > 0 || log_fin_rsp_cnt > 0); }
-#else
 bool TxnManager::waiting_for_response() { return (rsp_cnt > 0 || fin_rsp_cnt > 0 || log_rsp_cnt > 0 || log_fin_rsp_cnt > 0 || pre_prepare_cnt > 0); }
+#else
+bool TxnManager::waiting_for_response() { return (rsp_cnt > 0 || fin_rsp_cnt > 0 || log_rsp_cnt > 0 || log_fin_rsp_cnt > 0); }
 #endif
 bool TxnManager::is_multi_part() {
 	return query->partitions_touched.size() > 1;
@@ -1400,7 +1403,9 @@ void TxnManager::cleanup(yield_func_t &yield, RC rc, uint64_t cor_id) {
 	}
 	//在这里将依赖清理，不在行里面清理，在这里是这个事务的所有行都提交完，加入历史，或者回滚后直接释放，在这之后将依赖与这个事务的事务进行唤醒
 #if (CC_ALG == MV_NO_WAIT || CC_ALG == MV_WOUND_WAIT) && (CLV == CLV2 || CLV == CLV3)
-	assert(this->inconflict <= 0);
+	if(rc == RCOK){
+		assert(this->inconflict == 0);
+	}
 	ONCONFLICT * oncof = this->onconflicthead;//这里不需要让其变为空，后续清理事务管理器时会自动设置
     ONCONFLICT * oncof2;
     while(oncof!=NULL){

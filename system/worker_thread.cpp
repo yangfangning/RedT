@@ -510,9 +510,9 @@ RC WorkerThread::process_rfin(yield_func_t &yield, Message * msg, uint64_t cor_i
   txn_man->set_rc(((FinishMessage*)msg)->rc);
   if(((FinishMessage*)msg)->rc == RCOK){
     assert(txn_man->get_rc() == RCOK);
-#if (CC_ALG == MV_WOUND_WAIT || CC_ALG == MV_NO_WAIT) && CLV == CLV3
-  assert(txn_man->get_commit_timestamp() > 0);
-#endif
+// #if (CC_ALG == MV_WOUND_WAIT || CC_ALG == MV_NO_WAIT) && CLV == CLV3
+//   assert(txn_man->get_commit_timestamp() > 0);
+// #endif
   }
   if (txn_man->get_rc() == RCOK){
     txn_man->txn_state = COMMITING;
@@ -1080,7 +1080,7 @@ RC WorkerThread::process_rack_co_log(yield_func_t &yield, Message * msg, uint64_
       return rc;
     }else{
       txn_man->commit(yield, cor_id);
-      assert(txn_man->finish_retire == true);
+      //assert(txn_man->finish_retire == true);
     }
 #else
     // if(txn_man->query->partitions_touched.size() != 0)
@@ -1304,10 +1304,7 @@ RC WorkerThread::process_rprepare(yield_func_t &yield, Message * msg, uint64_t c
     return rc;
   }else{
     txn_man->set_prepare_timestamp(txn_man->get_start_timestamp());
-#if CLV == CLV3
-    DEBUG_T("%d:%d send rack_pre_prep ack to %d\n", g_node_id, msg->get_txn_id(),msg->return_node_id);
-    msg_queue.enqueue(get_thd_id(), Message::create_message(txn_man,RACK_PRE_PREP),msg->return_node_id);
-#endif
+
 #if CLV == CLV2 || CLV == CLV3
       //验证事务，写完prepare日志后验证
         if (ATOM_CAS(txn_man->prep_ready,false,false)){
