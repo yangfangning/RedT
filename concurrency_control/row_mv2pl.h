@@ -49,6 +49,7 @@ public:
   void lock_release(TxnManager * txn ,lock_t type);
   //退休者，也就是可见操作
   void retire(TxnManager * txn, row_t * row);
+  void clean_wait(TxnManager * txn ,lock_t type);
   
 private:
   //需要实现的函数

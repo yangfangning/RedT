@@ -110,6 +110,7 @@ public:
 	RC get_row(yield_func_t &yield,access_t type, TxnManager *txn, Access *access,uint64_t cor_id);
 	RC get_row_post_wait(access_t type, TxnManager * txn, row_t *& row);
 	uint64_t return_row(RC rc, access_t type, TxnManager *txn, row_t *row);
+	void clean_wait(TxnManager *txn, access_t type);
 	void retire(TxnManager *txn, row_t *row);
 	void return_row(RC rc, access_t type, TxnManager * txn, row_t * row, uint64_t _min_commit_ts);
 

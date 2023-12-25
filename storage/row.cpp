@@ -232,6 +232,11 @@ RC row_t::remote_copy_row(row_t* remote_row, TxnManager * txn, Access *access) {
   INC_STATS(txn->get_thd_id(), trans_cur_row_copy_time, get_sys_clock() - copy_time);
   return rc;
 }
+
+void row_t::clean_wait(TxnManager *txn,access_t type){
+	lock_t lt = (type == RD || type == SCAN) ? DLOCK_SH : DLOCK_EX; 
+	this->manager->clean_wait(txn, lt);	
+}
 //读写操作从这进入
 RC row_t::get_row(yield_func_t &yield,access_t type, TxnManager *txn, Access *access,uint64_t cor_id) {
   RC rc = RCOK;

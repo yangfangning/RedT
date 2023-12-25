@@ -250,14 +250,14 @@ RC YCSBTxnManager::run_txn(yield_func_t &yield, uint64_t cor_id) {
 	uint64_t starttime = get_sys_clock();
 
 	while(rc == RCOK && !is_done()) {
-		rc = run_txn_state(yield, cor_id);
+		
 #if CC_ALG == WOUND_WAIT || CC_ALG == MV_WOUND_WAIT
 		if (txn_state == WOUNDED) {
 			rc = Abort;
 			break;
 		}  
 #endif
-		
+		rc = run_txn_state(yield, cor_id);
 	}
 	if (rc!= WAIT){
     	DEBUG_T("finish read_write\n");

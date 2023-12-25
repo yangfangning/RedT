@@ -524,7 +524,13 @@ RC TxnManager::abort(yield_func_t &yield, uint64_t cor_id) {
         txn_stats.abort_stats(get_thd_id());
 	}
 	aborted = true;
-	release_locks(yield, Abort, cor_id);
+	if(!finish_read_write){
+		DEBUG_T("%ld abort but not finish_read_write\n");
+		last_row->clean_wait(this,last_type); //函数里需要判断这个事务中的lock_ready_cnt是否为0,当进入这个函数后，上锁，这样在判断，只有当前事务能够访问这个行，当为0时，说明事务已经被唤醒，需要重新执行了，那么就有可能变成了拥有者，也可能就是终止后执行，需要判断是不是成为了拥有者，如果是拥有者的话，将拥有者变为空，或者唤醒等待者？？
+		//不为0的话，说明还在等待队列中，将其从中找出，并去除，以上是对于写来说的，对于读来说，等于0直接结束，不等于0清理等待者
+        finish_read_write = true;
+    }
+    release_locks(yield, Abort, cor_id);
 #if CC_ALG == MAAT
 	//assert(time_table.get_state(get_txn_id()) == MAAT_ABORTED);
 	time_table.release(get_thd_id(),get_txn_id());
@@ -554,6 +560,7 @@ RC TxnManager::abort(yield_func_t &yield, uint64_t cor_id) {
 
 RC TxnManager::start_abort(yield_func_t &yield, uint64_t cor_id) {
 	// ! trans process time
+	txn_state = PREPARE;
 	uint64_t prepare_start_time = get_sys_clock();
 	txn_stats.prepare_start_time = prepare_start_time;
 	uint64_t process_time_span  = prepare_start_time - txn_stats.restart_starttime;
@@ -618,6 +625,17 @@ RC TxnManager::start_commit(yield_func_t &yield, uint64_t cor_id) {
 	RC rc = RCOK;
 	DEBUG_T("%ld start_commit RO?%d\n",get_txn_id(),query->readonly());
 	// printf("%ld start_commit RO?%d\n",get_txn_id(),query->readonly());
+	txn_state = PREPARE;
+#if CC_ALG == WOUND_WAIT || CC_ALG == MV_WOUND_WAIT
+	if(get_rc() == Abort){
+		if(query->partitions_touched.size() > 1) {
+			send_finish_messages();
+			abort(yield, cor_id);
+			return Abort;
+		}
+		return abort(yield, cor_id); 
+	}
+#endif
 
 #if USE_REPLICA
 	send_prepare_messages();
@@ -627,7 +645,6 @@ RC TxnManager::start_commit(yield_func_t &yield, uint64_t cor_id) {
     this->set_max_prepare_timestamp(this->get_prepare_timestamp());
 #endif
 //本地事务的状态进入提交阶段中的prepa阶段
-	txn_state = PREPARE;
 #if !USE_TAPIR
 
 	if(has_local_write()){
