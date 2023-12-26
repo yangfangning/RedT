@@ -105,6 +105,7 @@ RC Row_mv2pl::access(TxnManager * txn, lock_t type, row_t * row) {
     if (type == DLOCK_SH) {//读一定是可以读到的，就是可能会等待前面事务确定
         //先推高本地最大读时间戳，由于本地最大最大读时间戳一定式是小于当前时间的，所以后来的写事物的本地提交时间戳一定大于这个读时间戳，所以本地时间戳不保存了
 		//找到版本链最新数据
+        DEBUG_T("txn %ld access read\n",txn->get_txn_id());
         Mv2plhisEntry * whis =  writehistail;
         if(conflict) {
             //有上锁事务，
@@ -160,6 +161,7 @@ RC Row_mv2pl::access(TxnManager * txn, lock_t type, row_t * row) {
         txn->cur_row = ret;
     } else if (type == DLOCK_EX) {//如果是写操作
         //最大提交时间戳在提交时确定，可见但未提交的不能算，因为有回滚的可能
+        DEBUG_T("txn %ld access write\n",txn->get_txn_id());
         if( start_ts < max_retire_cts){
             rc = Abort;
             txn->set_rc(rc);
@@ -176,29 +178,26 @@ RC Row_mv2pl::access(TxnManager * txn, lock_t type, row_t * row) {
             //已经进入提交阶段的不会被wound，只会对正在运行的事务wound
             bool canwound = true;
             //如果请求锁的事务的开始时间戳大于拥有者的时间戳，那么说明应该等待，否则wound
-            if (start_ts > owner->txn->get_start_timestamp()){
+            if (start_ts > owner->start_ts){
                 canwound = false;
             }
-            //需要等待或者可以wound，且状态为wound或者running
-            if (!canwound || owner->txn->txn_state == WOUNDED || ATOM_CAS(owner->txn->txn_state, RUNNING, WOUNDED)){
-                if (canwound){
-                  owner->txn->set_rc(Abort);
-                  DEBUG_T("txn %ld wound by %ld \n", owner->txn->get_txn_id(), txn->get_txn_id());
+            //如果事务可以wound且没有进入其他状态，就放入等待队列中，然后从等待队列中取出。如果不可以wound，就加入等待队列中.如果可以wound但是进入了其他状态，就回滚
+            if(canwound && ATOM_CAS(owner->txn->txn_state, RUNNING, WOUNDED)){
+                owner->txn->set_rc(Abort);
+                DEBUG_T("txn %ld wound by %ld \n", owner->txn->get_txn_id(), txn->get_txn_id());
 #if CLV == CLV2 || CLV == CLV3 
-            ATOM_CAS(owner->txn->prep_ready, false, true);
-            ATOM_CAS(owner->txn->need_prep_cont, true, false);
-            ATOM_CAS(owner->txn->inconflict,owner->txn->inconflict,-1);
-#endif
-                }
-                Mv2plEntry * entry = create_2pl_entry();
+                ATOM_CAS(owner->txn->prep_ready, false, true);
+                ATOM_CAS(owner->txn->need_prep_cont, true, false);
+                ATOM_CAS(owner->txn->inconflict,owner->txn->inconflict,-1);
+#endif                   
+                release_2pl_entry(owner);
+                owner = NULL;
+                Mv2plEntry *entry = create_2pl_entry();
                 entry->start_ts = start_ts;
                 entry->txn = txn;
                 entry->type = type;
                 Mv2plEntry * en;
-                //wound后需要等待拥有者终止，等待唤醒
-                //txn->lock_ready = false;
                 ATOM_CAS(txn->lock_ready,1,0);
-                DEBUG_T("txn %ld need wait %ld co/xp wound\n", txn->get_txn_id(),owner->txn->get_txn_id());
                 txn->incr_lr();
                 //这里是将事务插入等待者队列中的合适未知，等待者队列中，最新的事务在最前，
                 en = waiters_head;
@@ -210,24 +209,120 @@ RC Row_mv2pl::access(TxnManager * txn, lock_t type, row_t * row) {
                 } else {
                     LIST_PUT_TAIL(waiters_head, waiters_tail, entry); 
                 }
-
                 waiter_cnt ++;
-                DEBUG_T("lk_wait (%ld,%ld): req type %d, key %ld %lx\n",
-                    txn->get_txn_id(), txn->get_batch_id(), type,
-                    _row->get_primary_key(), (uint64_t)_row);
-                //txn->twopl_wait_start = get_sys_clock();
+                while (waiters_head){ 
+                    waiter_cnt --;    
+                    LIST_GET_HEAD(waiters_head,waiters_tail,entry);
+                    if(entry->txn->get_rc() == Abort){
+                        if(entry->txn->decr_lr() == 0) {
+                            if(ATOM_CAS(entry->txn->lock_ready,false,true)) {
+                                DEBUG_T("txn %ld need cont run because rc = abort \n", entry->txn->get_txn_id());
+                                txn_table.restart_txn(txn->get_thd_id(), entry->txn->get_txn_id(), entry->txn->get_batch_id());//唤醒事务，等待者上位，重新执行事务，
+                            }         
+                        }
+                        release_2pl_entry(entry);
+                        continue;
+                    }else{
+                        owner = entry;
+                        row_t * ret = (writehistail == NULL) ? _row : writehistail->row;
+                        txn->cur_row = ret;
+#if CLV == CLV2 || CLV == CLV3
+                        Mv2plhisEntry * whis = writehistail;
+                        if( whis && !whis->commited){       
+                            ONCONFLICT * entry = whis->txn->creat_on_entry();
+                            entry->txn_id = txn->get_txn_id();
+                            entry->abort_cnt = txn->abort_cnt;
+                            entry->next = NULL;
+                            if(whis->txn->onconflicthead){
+                                whis->txn->onconflicttail->next = entry;
+                                whis->txn->onconflicttail = entry;
+                            }else{
+                                whis->txn->onconflicttail = entry;
+                                whis->txn->onconflicthead = entry;
+                            }
+                            //后继事务加依赖
+                            assert(txn->inconflict >= 0);
+                            ATOM_CAS(txn->prep_ready,true,false);
+                            txn->incr_pr();
+                            DEBUG_T("txn %ld inconflict %ld num: %d \n", txn->get_txn_id(),whis->txn->get_txn_id(), txn->inconflict);
+                        }           
+#endif
+                    break;
+                    } 
+                } 
+                while (waiters_read_head){
+                    LIST_GET_HEAD(waiters_read_head, waiters_read_tail, entry);
+                    //统计信息
+                    uint64_t timespan = get_sys_clock() - entry->txn->twopl_wait_start;
+                    entry->txn->twopl_wait_start = 0;
+                    entry->txn->txn_stats.cc_block_time += timespan;
+                    entry->txn->txn_stats.cc_block_time_short += timespan;
+                    INC_STATS(txn->get_thd_id(), twopl_wait_time, timespan);
+                    //设置唤醒后事务的要获取的行数据，快照读数据
+                    ts_t ts = entry->start_ts;
+                    Mv2plhisEntry * whis =  writehistail;
+                    while (whis != NULL && whis->ts > ts) {
+                        whis = whis->next;
+                    }
+                    entry->txn->cur_row = (whis == NULL) ? _row : whis->row;
+                    if (entry->txn->decr_lr() == 0) {
+                        if (ATOM_CAS(entry->txn->lock_ready, false, true)) {
+                            DEBUG_T("txn %ld need cont run read\n", entry->txn->get_txn_id());
+                            txn_table.restart_txn(txn->get_thd_id(), entry->txn->get_txn_id(),entry->txn->get_batch_id());  // 唤醒事务，等待者上位，重新执行事务，
+                        }
+                    }
+                    release_2pl_entry(entry);
+                    waiter_cnt --;
+                }
+                if(!owner){
+                  rc = Abort;
+                }else if(txn == owner->txn){
+                    DEBUG_T("txn %ld wound become owner \n", txn->get_txn_id());
+                    rc = RCOK;
+                }else{
+                    DEBUG_T("txn %ld wound but other tx run \n", txn->get_txn_id());
+                    if(owner->txn->decr_lr() == 0) {
+                        if(ATOM_CAS(eowner->txn->lock_ready,false,true)) {
+                            DEBUG_T("txn %ld need cont run \n", owner->txn->get_txn_id());
+                            txn_table.restart_txn(txn->get_thd_id(), owner->txn->get_txn_id(), owner->txn->get_batch_id());//唤醒事务，等待者上位，重新执行事务，
+                        }         
+                    }
+                    rc = WAIT;
+                }   
+            }else if (!canwound){
+                Mv2plEntry * entry = create_2pl_entry();
+                entry->start_ts = start_ts;
+                entry->txn = txn;
+                entry->type = type;
+                Mv2plEntry * en;
+                //wound后需要等待拥有者终止，等待唤醒
+                //txn->lock_ready = false;
+                ATOM_CAS(txn->lock_ready,1,0);
+                DEBUG_T("txn %ld need wait %ld co wound\n", txn->get_txn_id(),owner->txn->get_txn_id());
+                txn->incr_lr();
+                //这里是将事务插入等待者队列中的合适未知，等待者队列中，最新的事务在最前，
+                en = waiters_head;
+                while (en != NULL && start_ts > en->start_ts) {
+                    en = en->next;
+                }
+                if (en) {
+                    LIST_INSERT_BEFORE(en, entry,waiters_head); 
+                } else {
+                    LIST_PUT_TAIL(waiters_head, waiters_tail, entry); 
+                }
+                waiter_cnt ++;
                 rc = WAIT;
-                //txn->wait_starttime = get_sys_clock();
             }else{
+                DEBUG_T("txn %ld need abort because owner come other \n", txn->get_txn_id(),owner->txn->get_txn_id());
                 rc = Abort;
                 txn->set_rc(rc);
 #if CLV == CLV2 || CLV == CLV3 
-            ATOM_CAS(txn->prep_ready, false, true);
-            ATOM_CAS(txn->need_prep_cont, true, false);
-            ATOM_CAS(txn->inconflict,txn->inconflict,-1);
+                ATOM_CAS(txn->prep_ready, false, true);
+                ATOM_CAS(txn->need_prep_cont, true, false);
+                ATOM_CAS(txn->inconflict,txn->inconflict,-1);
 #endif
             }
-            
+
 #endif          
 
 #if CC_ALG == MV_NO_WAIT
@@ -239,7 +334,7 @@ RC Row_mv2pl::access(TxnManager * txn, lock_t type, row_t * row) {
             ATOM_CAS(txn->need_prep_cont, true, false);
             ATOM_CAS(txn->inconflict,txn->inconflict,-1);
 #endif
-            DEBUG_T("abort %ld,%ld %ld %lx\n", txn->get_txn_id(), txn->get_batch_id(),
+            DEBUG_T("abort %ld , %ld %ld %lx\n", txn->get_txn_id(), txn->get_batch_id(),
             _row->get_primary_key(), (uint64_t)_row);
             goto final;
 #endif
@@ -310,6 +405,15 @@ void Row_mv2pl::lock_release(TxnManager * txn, lock_t type){
     if(type == XP1){
         DEBUG_T("txn %ld abort\n", txn->get_txn_id());
         Mv2plEntry * retire = owner;
+
+#if CC_ALG == MV_WOUND_WAIT && CLV == CLV1
+        if(owner == NULL || txn->get_txn_id() != owner->txn->get_txn_id()){
+          DEBUG_T("txn %ld not owner because wound\n", txn->get_txn_id());
+        }else{
+          owner = NULL;
+          release_2pl_entry(retire);
+        }
+#else
 #if CLV == CLV2 || CLV == CLV3
         //判断回滚的事务是否是拥有者，是的话不用清理历史了，否则要清理历史
         //不是拥有者
@@ -356,6 +460,7 @@ void Row_mv2pl::lock_release(TxnManager * txn, lock_t type){
         owner = NULL;
         release_2pl_entry(retire);
 #endif
+#endif
         //当在历史版本中的回滚，或者拥有者回滚时
         if  (owner == NULL){
             DEBUG_T("wait run\n");
@@ -379,7 +484,7 @@ void Row_mv2pl::lock_release(TxnManager * txn, lock_t type){
                 entry->txn->cur_row = (whis == NULL) ? _row : whis->row;
                 if (entry->txn->decr_lr() == 0) {
                     if (ATOM_CAS(entry->txn->lock_ready, false, true)) {
-                        DEBUG_T("txn %ld need cont run \n", entry->txn->get_txn_id());
+                        DEBUG_T("txn %ld need cont run read\n", entry->txn->get_txn_id());
                         txn_table.restart_txn(txn->get_thd_id(), entry->txn->get_txn_id(),entry->txn->get_batch_id());  // 唤醒事务，等待者上位，重新执行事务，
                     }
                 }
@@ -394,7 +499,7 @@ void Row_mv2pl::lock_release(TxnManager * txn, lock_t type){
                 if(entry->txn->get_rc() == Abort){
                     if(entry->txn->decr_lr() == 0) {
                         if(ATOM_CAS(entry->txn->lock_ready,false,true)) {
-                            DEBUG_T("txn %ld need cont run \n", entry->txn->get_txn_id());
+                            DEBUG_T("txn %ld need cont run write\n", entry->txn->get_txn_id());
                             txn_table.restart_txn(txn->get_thd_id(), entry->txn->get_txn_id(), entry->txn->get_batch_id());//唤醒事务，等待者上位，重新执行事务，
                         }         
                     }
@@ -513,6 +618,29 @@ void Row_mv2pl::retire(TxnManager * txn, row_t * row) {
             whis = whis->next;
         }
         entry->txn->cur_row = (whis == NULL) ? _row : whis->row;
+        //这里唤醒后应该加依赖的
+#if CLV == CLV2 || CLV == CLV3
+        if( whis && !whis->commited){
+            //读的数据不为空,且没提交增加依赖
+            //前驱事务加依赖
+            ONCONFLICT * conflict = whis->txn->creat_on_entry();
+            entry->txn_id = entry->txn->get_txn_id();
+            entry->abort_cnt = entry->txn->abort_cnt;
+            entry->next = NULL;
+            if(whis->txn->onconflicthead){
+              whis->txn->onconflicttail->next = conflict;
+              whis->txn->onconflicttail = conflict;
+            }else{
+              whis->txn->onconflicttail = conflict;
+              whis->txn->onconflicthead = conflict;
+            }
+            //后继事务加依赖
+            assert(entry->txn->inconflict >= 0);
+            ATOM_CAS(entry->txn->prep_ready,true,false);
+            entry->txn->incr_pr();
+            DEBUG_T("txn %ld add inconflict %ld \n", entry->txn->get_txn_id(),whis->txn->get_txn_id());
+        }
+#endif 
         if (entry->txn->decr_lr() == 0) {
             DEBUG_T("txn %ld need cont run \n", entry->txn->get_txn_id());
             if (ATOM_CAS(entry->txn->lock_ready, false, true)) {

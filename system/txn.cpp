@@ -525,7 +525,7 @@ RC TxnManager::abort(yield_func_t &yield, uint64_t cor_id) {
 	}
 	aborted = true;
 	if(!finish_read_write){
-		DEBUG_T("%ld abort but not finish_read_write\n");
+		DEBUG_T("%ld abort but not finish_read_write\n", get_txn_id());
 		last_row->clean_wait(this,last_type); //函数里需要判断这个事务中的lock_ready_cnt是否为0,当进入这个函数后，上锁，这样在判断，只有当前事务能够访问这个行，当为0时，说明事务已经被唤醒，需要重新执行了，那么就有可能变成了拥有者，也可能就是终止后执行，需要判断是不是成为了拥有者，如果是拥有者的话，将拥有者变为空，或者唤醒等待者？？
 		//不为0的话，说明还在等待队列中，将其从中找出，并去除，以上是对于写来说的，对于读来说，等于0直接结束，不等于0清理等待者
         finish_read_write = true;
@@ -1238,7 +1238,7 @@ void TxnManager::register_thread(Thread * h_thd) {
 }
 
 void TxnManager::set_txn_id(txnid_t txn_id) { txn->txn_id = txn_id; }
-
+void TxnManager::clean_wait() { last_row->clean_wait(this, last_type); }
 txnid_t TxnManager::get_txn_id() { return txn->txn_id; }
 
 Workload *TxnManager::get_wl() { return h_wl; }

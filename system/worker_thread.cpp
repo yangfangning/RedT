@@ -1249,7 +1249,7 @@ RC WorkerThread::process_rqry_cont(yield_func_t &yield, Message * msg, uint64_t 
     rc = txn_man->run_txn(yield, cor_id);
   }else{
     //这种情况是，当本地重新执行后，成为拥有者，但是成为拥有者后被wound，然后重新执行，要吧owner清理了
-    txn_man->last_row->clean_wait(txn_man, txn_man->last_type);//这里好像不需要
+    txn_man->clean_wait();
     txn_man->finish_read_write = true;
   }
   // Send response
@@ -1272,6 +1272,8 @@ RC WorkerThread::process_rtxn_cont(yield_func_t &yield, Message * msg, uint64_t 
   if(!txn_man->aborted){
     if(txn_man->get_rc() != Abort){
       txn_man->run_txn_post_wait();
+    }else{
+      txn_man->clean_wait();
     }
     RC rc = txn_man->run_txn(yield, cor_id);
     check_if_done(rc);

@@ -146,8 +146,9 @@ public:
 	void clear();
 	void reset_query();
 	void release();
+    void clean_wait();
 
-	Thread * h_thd;
+    Thread * h_thd;
 	Workload * h_wl;
 
 	virtual RC      run_txn(yield_func_t &yield, uint64_t cor_id) = 0;
