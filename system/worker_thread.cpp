@@ -500,6 +500,7 @@ RC WorkerThread::process_set_co_ts(yield_func_t &yield, Message * msg, uint64_t 
 RC WorkerThread::process_rfin(yield_func_t &yield, Message * msg, uint64_t cor_id) {
   DEBUG_T("RFIN %ld from %ld\n",msg->get_txn_id(),msg->return_node_id);
   assert(CC_ALG != CALVIN);
+  txn_man->txn_state = COMMITING;
   M_ASSERT_V(!IS_LOCAL(msg->get_txn_id()), "RFIN local: %ld %ld/%d\n", msg->get_txn_id(),
              msg->get_txn_id() % g_node_cnt, g_node_id);
 #if CC_ALG == MAAT || CC_ALG == MV_WOUND_WAIT || CC_ALG == MV_NO_WAIT
@@ -515,7 +516,6 @@ RC WorkerThread::process_rfin(yield_func_t &yield, Message * msg, uint64_t cor_i
 // #endif
   }
   if (txn_man->get_rc() == RCOK){
-    txn_man->txn_state = COMMITING;
 #if CLV == CLV3
   if(txn_man->finish_retire == false){
     txn_man->retire(yield, cor_id);
@@ -615,7 +615,7 @@ RC WorkerThread::process_rack_log(yield_func_t &yield, Message * msg, uint64_t c
 #if CC_ALG == MV_NO_WAIT || CC_ALG == MV_WOUND_WAIT
 #if CLV == CLV2 || CLV == CLV3
       //验证事务，写完prepare日志后验证
-        if (ATOM_CAS(txn_man->prep_ready,false,false)){
+        if (ATOM_CAS(txn_man->prep_ready,false,false) && rc == RCOK){
           assert(txn_man->txn_state == PREPARE);
           ATOM_CAS(txn_man->need_prep_cont,false,true);
           return WAIT;
@@ -678,7 +678,7 @@ RC WorkerThread::process_rack_log(yield_func_t &yield, Message * msg, uint64_t c
 #if CC_ALG == MV_WOUND_WAIT || CC_ALG == MV_NO_WAIT
 #if CLV == CLV2 || CLV == CLV3
       //验证事务，写完prepare日志后验证
-        if (ATOM_CAS(txn_man->prep_ready,false,false)){
+        if (ATOM_CAS(txn_man->prep_ready,false,false) && rc == RCOK){
           assert(txn_man->txn_state == PREPARE);
           ATOM_CAS(txn_man->need_prep_cont,false,true);
           return WAIT;
@@ -970,7 +970,7 @@ assert(responses_left >= 0);
 #if CC_ALG == MV_NO_WAIT || CC_ALG == MV_WOUND_WAIT
 #if CLV == CLV2 || CLV == CLV3
       //验证事务，写完prepare日志后验证
-        if (ATOM_CAS(txn_man->prep_ready,false,false)){
+        if (ATOM_CAS(txn_man->prep_ready,false,false) && rc == RCOK){
           assert(txn_man->txn_state == PREPARE);
           ATOM_CAS(txn_man->need_prep_cont,false,true);
           return WAIT;
@@ -1315,7 +1315,7 @@ RC WorkerThread::process_rprepare(yield_func_t &yield, Message * msg, uint64_t c
 
 #if CLV == CLV2 || CLV == CLV3
       //验证事务，写完prepare日志后验证
-        if (ATOM_CAS(txn_man->prep_ready,false,false)){
+        if (ATOM_CAS(txn_man->prep_ready,false,false) && rc == RCOK){
           assert(txn_man->txn_state == PREPARE);
           ATOM_CAS(txn_man->need_prep_cont,false,true);
           return WAIT;
