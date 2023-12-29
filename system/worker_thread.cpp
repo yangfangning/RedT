@@ -488,6 +488,7 @@ RC WorkerThread::run(yield_func_t &yield, uint64_t cor_id) {
 
 RC WorkerThread::process_set_co_ts(yield_func_t &yield, Message * msg, uint64_t cor_id) {
 #if CLV == CLV3
+  DEBUG_T("提前设置时间戳\n");
   txn_man->set_commit_timestamp(((FinishMessage*)msg)->commit_timestamp);
   if(txn_man->get_rc() == RCOK){
     txn_man->retire(yield, cor_id);
@@ -518,11 +519,13 @@ RC WorkerThread::process_rfin(yield_func_t &yield, Message * msg, uint64_t cor_i
   if (txn_man->get_rc() == RCOK){
 #if CLV == CLV3
   if(txn_man->finish_retire == false){
+DEBUG_T("%d 如果发送finish消息时还没退休，就退休\n",txn_man->get_txn_id());
     txn_man->retire(yield, cor_id);
     txn_man->finish_retire = true;
   }    
 #endif 
 #if CLV == CLV2
+DEBUG_T("clv2退休\n");
     txn_man->retire(yield, cor_id);
     txn_man->finish_retire = true;
 #endif   
@@ -615,7 +618,7 @@ RC WorkerThread::process_rack_log(yield_func_t &yield, Message * msg, uint64_t c
 #if CC_ALG == MV_NO_WAIT || CC_ALG == MV_WOUND_WAIT
 #if CLV == CLV2 || CLV == CLV3
       //验证事务，写完prepare日志后验证
-        if (ATOM_CAS(txn_man->prep_ready,false,false) && rc == RCOK){
+        if (ATOM_CAS(txn_man->prep_ready,false,false) && txn_man->get_rc() == RCOK){
           assert(txn_man->txn_state == PREPARE);
           ATOM_CAS(txn_man->need_prep_cont,false,true);
           return WAIT;
@@ -678,7 +681,7 @@ RC WorkerThread::process_rack_log(yield_func_t &yield, Message * msg, uint64_t c
 #if CC_ALG == MV_WOUND_WAIT || CC_ALG == MV_NO_WAIT
 #if CLV == CLV2 || CLV == CLV3
       //验证事务，写完prepare日志后验证
-        if (ATOM_CAS(txn_man->prep_ready,false,false) && rc == RCOK){
+        if (ATOM_CAS(txn_man->prep_ready,false,false) && txn_man->get_rc() == RCOK){
           assert(txn_man->txn_state == PREPARE);
           ATOM_CAS(txn_man->need_prep_cont,false,true);
           return WAIT;
@@ -970,7 +973,7 @@ assert(responses_left >= 0);
 #if CC_ALG == MV_NO_WAIT || CC_ALG == MV_WOUND_WAIT
 #if CLV == CLV2 || CLV == CLV3
       //验证事务，写完prepare日志后验证
-        if (ATOM_CAS(txn_man->prep_ready,false,false) && rc == RCOK){
+        if (ATOM_CAS(txn_man->prep_ready,false,false) && txn_man->get_rc() == RCOK){
           assert(txn_man->txn_state == PREPARE);
           ATOM_CAS(txn_man->need_prep_cont,false,true);
           return WAIT;
@@ -1304,6 +1307,7 @@ RC WorkerThread::process_rprepare(yield_func_t &yield, Message * msg, uint64_t c
     txn_man->set_prepare_timestamp(get_next_ts());
 //clv3验证
 #if CLV == CLV3
+DEBUG_T("远程写事务提前发送消息给协调者\n");
     DEBUG_T("%d:%d send rack_pre_prep ack to %d\n", g_node_id, msg->get_txn_id(),msg->return_node_id);
     msg_queue.enqueue(get_thd_id(), Message::create_message(txn_man,RACK_PRE_PREP),msg->return_node_id); 
 #endif
@@ -1315,7 +1319,7 @@ RC WorkerThread::process_rprepare(yield_func_t &yield, Message * msg, uint64_t c
 
 #if CLV == CLV2 || CLV == CLV3
       //验证事务，写完prepare日志后验证
-        if (ATOM_CAS(txn_man->prep_ready,false,false) && rc == RCOK){
+        if (ATOM_CAS(txn_man->prep_ready,false,false) && txn_man->get_rc() == RCOK){
           assert(txn_man->txn_state == PREPARE);
           ATOM_CAS(txn_man->need_prep_cont,false,true);
           return WAIT;

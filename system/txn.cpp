@@ -648,9 +648,10 @@ RC TxnManager::start_commit(yield_func_t &yield, uint64_t cor_id) {
 #if !USE_TAPIR
 
 	if(has_local_write()){
-#if CLV == CLV3
+#if CLV == CLV3	
         pre_prepare_cnt--;
 		if(pre_prepare_cnt == 0){
+			DEBUG_T("%ld 本地写事务提前设置提交时间戳\n",get_txn_id());
 			this->set_commit_timestamp(this->max_prepare_timestamp);
 			this->retire(yield, cor_id);
 			this->finish_retire = true;
@@ -891,12 +892,12 @@ void TxnManager::send_colog_messages() {
 
 void TxnManager::send_co_ts_messages() {
 	assert(IS_LOCAL(get_txn_id()));
-	for(uint64_t i = 0; i < query->partitions_touched.size(); i++) {
-		if(GET_NODE_ID(query->partitions_touched[i]) == g_node_id) {
+	for(uint64_t i = 0; i < query->partitions_modified.size(); i++) {
+		if(GET_NODE_ID(query->partitions_modified[i]) == g_node_id) {
 			continue;
     	}
 		msg_queue.enqueue(get_thd_id(), Message::create_message(this, SET_CO_TS),
-											GET_NODE_ID(query->partitions_touched[i]));
+											GET_NODE_ID(query->partitions_modified[i]));
 	}
 }
 void TxnManager::send_finish_messages() {

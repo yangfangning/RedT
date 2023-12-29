@@ -415,6 +415,7 @@ void Row_mv2pl::lock_release(TxnManager * txn, lock_t type){
         //判断回滚的事务是否是拥有者，是的话不用清理历史了，否则要清理历史
         //不是拥有者
         if (owner == NULL || txn->get_txn_id() != owner->txn->get_txn_id()){
+            DEBUG_T("级联终止 %ld\n");
             DEBUG_T("txn %ld not owner\n", txn->get_txn_id());
             Mv2plhisEntry * entry = writehistail;
             //找到要清理的版本，要清理的版本，要满足事务id能对上

@@ -1,14 +1,14 @@
 set -x
 DELAY=${1:-0}
 CENTER_COUNT=${2:-4}
-for i in $(seq 2 5)
+for i in $(seq 2 4)
 do
     # if [[ $i -ne 19 ]] 
     # then
         ssh 172.20.242.$i "sudo tc qdisc del root dev eth0 2>/dev/null"
         ssh 172.20.242.$i "sudo tc qdisc add dev eth0 root handle 1: prio bands 5"
         ssh 172.20.242.$i "sudo tc qdisc add dev eth0 parent 1:5 handle 50: netem delay ${DELAY}ms"
-        for j in $(seq 2 5)
+        for j in $(seq 2 4)
         do
             # if [[ $j -ne 19 ]] 
             # then

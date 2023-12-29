@@ -2,7 +2,7 @@ set -x
 ps -aux | grep runcl | awk '{print $2}' | xargs kill -9 2>/dev/null 1>/dev/null
 ps -aux | grep rundb | awk '{print $2}' | xargs kill -9 2>/dev/null 1>/dev/null
 
-for i in $(seq 2 5)
+for i in $(seq 2 4)
 do
     if [[ $i -ne 5 ]] 
     then

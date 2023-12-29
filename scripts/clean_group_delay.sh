@@ -1,5 +1,5 @@
 set -x
-for i in $(seq 2 5)
+for i in $(seq 2 4)
 do
     # if [[ $i -ne 19 ]] 
     # then
