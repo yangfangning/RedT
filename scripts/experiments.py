@@ -1062,15 +1062,15 @@ def ycsb_thread():
     nnodes = [3]
     tapir = ['false']
     # algos=['CALVIN','MAAT','MVCC','NO_WAIT','TIMESTAMP','WAIT_DIE']
-    algos=['MV_NO_WAIT','MV_WOUND_WAIT']
-    clvs=['CLV1','CLV2','CLV3']
+    algos=['MV_NO_WAIT']
+    clvs=['CLV1','CLV3']
     base_table_size=1048576
     # base_table_size=1048576*8
     #base_table_size=2097152*8
     txn_write_perc = [0.5]
     tup_write_perc = [0.5]
     load = [10000]
-    tcnt = [1,2,4,8,16,32,64]
+    tcnt = [7,8,9,10,11,12,16]
     # tcnt = [6]
     ctcnt = [4]
     scnt = [1]
@@ -1107,7 +1107,7 @@ def ycsb_writes():
 def ycsb_skew():
     wl = 'YCSB'
     nnodes = [3]
-    algos=['MV_WOUND_WAIT','MV_NO_WAIT']
+    algos=['MV_NO_WAIT']
     clvs=['CLV1','CLV2','CLV3']
     tapir=['false']
     early=['false']
@@ -1118,11 +1118,11 @@ def ycsb_skew():
 
     txn_write_perc = [1]
     tup_write_perc = [0.5]
-    load = [320] #node_cnt*tcnt
+    load = [4000,6000,8000,10000,12000] #node_cnt*tcnt
 
-    tcnt = [7]  #THREAD_CNT
-    # skew = [0.0,0.2,0.4,0.5]
-    skew = [0.0,0.2,0.4,0.6,0.8,0.9]
+    tcnt = [8]  #THREAD_CNT
+    skew = [0.2]
+    #skew = [0.0,0.2,0.4,0.6,0.8,0.9]
     fmt = ["WORKLOAD","NODE_CNT","CC_ALG","SYNTH_TABLE_SIZE","TUP_WRITE_PERC","CLV","TXN_WRITE_PERC","MAX_TXN_IN_FLIGHT","USE_TAPIR","EARLY_PREPARE","ZIPF_THETA","THREAD_CNT"]
     exp = [[wl,n,algo,base_table_size*n,tup_wr_perc,clv,txn_wr_perc,ld,ir,er,sk,thr] for thr,txn_wr_perc,tup_wr_perc,ld,n,algo,sk,ir,er,clv in itertools.product(tcnt,txn_write_perc,tup_write_perc,load,nnodes,algos,skew,tapir,early,clvs)]
     return fmt,exp

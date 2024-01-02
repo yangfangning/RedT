@@ -49,6 +49,8 @@ public:
   double total_runtime;
 
   uint64_t parts_touched;
+  //Cascade_abort_cnt
+  uint64_t Cascade_abort_cnt;
 
   // Execution
   uint64_t txn_cnt;
