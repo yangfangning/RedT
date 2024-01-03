@@ -69,8 +69,6 @@ void Stats_thd::init(uint64_t thd_id) {
 void Stats_thd::clear() {
 
   total_runtime=0;
-  //Cascade_abort_cnt
-  Cascade_abort_cnt = 0;
 
   // Execution
   txn_cnt=0;
@@ -614,8 +612,6 @@ void Stats_thd::print(FILE * outf, bool prog) {
   double single_part_txn_avg_time = 0;
   double avg_parts_touched = 0;
   double avg_preqlen_over_cnt = 0;
-  double abore_rate;
-  if (total_txn_commit_cnt > 0) abore_rate = total_txn_abort_cnt / (total_txn_commit_cnt + total_txn_abort_cnt);
   if (total_runtime > 0) tput = txn_cnt / (total_runtime / BILLION);
   if(txn_cnt > 0) {
     txn_run_avg_time = txn_run_time / txn_cnt;
@@ -629,8 +625,6 @@ void Stats_thd::print(FILE * outf, bool prog) {
   fprintf(outf,
   ",tput=%f"
   ",txn_cnt=%ld"
-  ",Cascade_abort_cnt=%ld"
-  ",abort_rate=%ld"
   ",remote_txn_cnt=%ld"
   ",local_txn_cnt=%ld"
   ",local_txn_start_cnt=%ld"
@@ -655,7 +649,7 @@ void Stats_thd::print(FILE * outf, bool prog) {
   ",record_write_cnt=%ld"
   ",parts_touched=%ld"
           ",avg_parts_touched=%f",
-          tput, txn_cnt, Cascade_abort_cnt,abore_rate,remote_txn_cnt, local_txn_cnt, local_txn_start_cnt, total_txn_commit_cnt,
+          tput, txn_cnt, remote_txn_cnt, local_txn_cnt, local_txn_start_cnt, total_txn_commit_cnt,
           local_txn_commit_cnt, remote_txn_commit_cnt, total_num_atomic_retry, total_txn_abort_cnt,positive_txn_abort_cnt, unique_txn_abort_cnt,
           local_txn_abort_cnt, remote_txn_abort_cnt, txn_run_time / BILLION,
           txn_run_avg_time / BILLION, multi_part_txn_cnt, multi_part_txn_run_time / BILLION,
@@ -1725,8 +1719,6 @@ void Stats_thd::combine(Stats_thd * stats) {
   txn_wait_cnt+=stats->txn_wait_cnt;
   txn_conflict_cnt+=stats->txn_conflict_cnt;
 
-  //Cascade_abort_cnt
-  Cascade_abort_cnt += stats->Cascade_abort_cnt;
   // 2PL
   twopl_already_owned_cnt+=stats->twopl_already_owned_cnt;
   twopl_owned_cnt+=stats->twopl_owned_cnt;

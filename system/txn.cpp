@@ -1433,7 +1433,6 @@ void TxnManager::cleanup(yield_func_t &yield, RC rc, uint64_t cor_id) {
 			DEBUG_T("txn %ld clean onconflict co %ld \n", this->get_txn_id(), oncof->txn_id);
 			txn_table.clear_onconflict_co(this->get_thd_id(),oncof->txn_id, 0, oncof->abort_cnt);
 		}else{
-			INC_STATS(get_thd_id(), Cascade_abort_cnt, 1);
 			txn_table.clear_onconflict_xp(this->get_thd_id(),oncof->txn_id, 0, oncof->abort_cnt);
 		}
 		oncof2 = oncof;
