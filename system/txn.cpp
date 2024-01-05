@@ -370,9 +370,8 @@ void TxnManager::reset() {
 	fin_rsp_cnt = 0;
 	log_rsp_cnt = 0;
 	log_fin_rsp_cnt = 0;
-    pre_prepare_cnt = 0;
-    txn_state = RUNNING;
-    // aborted = false;
+	txn_state = RUNNING;
+	// aborted = false;
 	return_id = UINT64_MAX;
 	twopl_wait_start = 0;
 
@@ -861,7 +860,7 @@ void TxnManager::send_prepare_messages() {
 	fin_rsp_cnt = 0;
 	log_rsp_cnt = 0;
 	log_fin_rsp_cnt = 0;
-	pre_prepare_cnt = query->partitions_touched.size();
+	pre_prepare_cnt = query->partitions_touched.size() - 1;
 #endif
 	rsp_cnt = query->partitions_touched.size() - 1;
 
@@ -890,12 +889,12 @@ void TxnManager::send_colog_messages() {
 
 void TxnManager::send_co_ts_messages() {
 	assert(IS_LOCAL(get_txn_id()));
-	for(uint64_t i = 0; i < query->partitions_modified.size(); i++) {
-		if(GET_NODE_ID(query->partitions_modified[i]) == g_node_id) {
+	for(uint64_t i = 0; i < query->partitions_touched.size(); i++) {
+		if(GET_NODE_ID(query->partitions_touched[i]) == g_node_id) {
 			continue;
     	}
 		msg_queue.enqueue(get_thd_id(), Message::create_message(this, SET_CO_TS),
-											GET_NODE_ID(query->partitions_modified[i]));
+											GET_NODE_ID(query->partitions_touched[i]));
 	}
 }
 void TxnManager::send_finish_messages() {
