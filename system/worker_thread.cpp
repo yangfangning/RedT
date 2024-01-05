@@ -1316,7 +1316,10 @@ DEBUG_T("远程写事务提前发送消息给协调者\n");
     return rc;
   }else{
     txn_man->set_prepare_timestamp(txn_man->get_start_timestamp());
-
+#if CLV == CLV3
+    DEBUG_T("%d:%d send rack_pre_prep ack to %d\n", g_node_id, msg->get_txn_id(),msg->return_node_id);
+    msg_queue.enqueue(get_thd_id(), Message::create_message(txn_man,RACK_PRE_PREP),msg->return_node_id);
+#endif
 #if CLV == CLV2 || CLV == CLV3
       //验证事务，写完prepare日志后验证
         if (ATOM_CAS(txn_man->prep_ready,false,false) && txn_man->get_rc() == RCOK){

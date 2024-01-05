@@ -647,17 +647,15 @@ RC TxnManager::start_commit(yield_func_t &yield, uint64_t cor_id) {
 //本地事务的状态进入提交阶段中的prepa阶段
 #if !USE_TAPIR
 
-	if(has_local_write()){
-#if CLV == CLV3	
-        pre_prepare_cnt--;
-		if(pre_prepare_cnt == 0){
-			DEBUG_T("%ld 本地写事务提前设置提交时间戳\n",get_txn_id());
-			this->set_commit_timestamp(this->max_prepare_timestamp);
-			this->retire(yield, cor_id);
-			this->finish_retire = true;
-		}
+#if CLV == CLV3
+    if(this->query->partitions_touched.size() == 1){
+        this->set_commit_timestamp(this->max_prepare_timestamp);
+        this->retire(yield, cor_id);
+        this->finish_retire = true;
+    }
 #endif
-        log_replica(RLOG, g_node_id);
+	if(has_local_write()){
+		log_replica(RLOG, g_node_id);
 	}
 	if(rsp_cnt != 0 || log_rsp_cnt!=0){
 		return WAIT_REM;
@@ -863,7 +861,7 @@ void TxnManager::send_prepare_messages() {
 	fin_rsp_cnt = 0;
 	log_rsp_cnt = 0;
 	log_fin_rsp_cnt = 0;
-	pre_prepare_cnt = query->partitions_modified.size();
+	pre_prepare_cnt = query->partitions_touched.size();
 #endif
 	rsp_cnt = query->partitions_touched.size() - 1;
 
