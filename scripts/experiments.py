@@ -1308,7 +1308,7 @@ def tpcc_wh():
     tcnt = [10]
     ctcnt = [4]
     fmt = ["WORKLOAD","NODE_CNT","CC_ALG","PERC_PAYMENT","NUM_WH","MAX_TXN_IN_FLIGHT","THREAD_CNT","CLIENT_THREAD_CNT","CLV"]
-    exp = [[wl,n,cc,pp,wh,tif,thr,cthr,clv] for thr,cthr,tif,pp,n,cc,clv in itertools.product(tcnt,ctcnt,load,npercpay,nnodes,nalgos,clvs)]
+    exp = [[wl,n,cc,pp,wh,tif,thr,cthr,clv] for thr,cthr,tif,pp,n,cc,clv,wh in itertools.product(tcnt,ctcnt,load,npercpay,nnodes,nalgos,clvs,wh)]
     return fmt,exp
 
 def tpcc_neworder_payment():
@@ -1337,9 +1337,9 @@ experiment_map = {
     'ycsb_network_delay': ycsb_network_delay,
     'ycsb_hot': ycsb_hot,
     'ycsb_cross_dc': ycsb_cross_dc,
-    'tpcc_payment': tpcc_cross_dc,
+    'tpcc_cross_dc': tpcc_cross_dc,
     'tpcc_wh': tpcc_wh,
-    'tpcc_neworder': tpcc_neworder_payment,
+    'tpcc_neworder_payment': tpcc_neworder_payment,
 
     'pps_scaling': pps_scaling,
     'ycsb_thread': ycsb_thread,
