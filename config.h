@@ -185,6 +185,7 @@
 #define CC_ALG MV_WOUND_WAIT
 
 #define CLV CLV1
+#define NEW_COMMIT_TIME true //提交时间戳在发送prepare消息时由协调者直接确定，不需要再由参与者共同产出
 
 #define YCSB_ABORT_MODE false
 #define QUEUE_C  APACITY_NEW 1000000
@@ -489,7 +490,8 @@ enum PPSTxnType {
 #define CLV1 1//正常时间提交
 #define CLV2 2//收到提交操作后执行
 #define CLV3 3//增加一轮通信
-#define CLV4 4//测试一下问题
+#define CLV4 4//将提交时间戳在发送prepare消息时执行，在收到prepare消息后退休
+#define CLV5 5//测试一下问题
 
 
 // Concurrency Control Algorithm并发控制算法

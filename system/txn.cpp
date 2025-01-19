@@ -255,7 +255,9 @@ void TxnStats::commit_stats(uint64_t thd_id, uint64_t txn_id, uint64_t batch_id,
 void Transaction::init() {
 	timestamp = UINT64_MAX;
 	start_timestamp = UINT64_MAX;
+#if !NEW_COMMIT_TIME
 	prepare_timestamp = UINT64_MAX;
+#endif 
 	end_timestamp = UINT64_MAX;
 	txn_id = UINT64_MAX;
 	batch_id = UINT64_MAX;
@@ -400,8 +402,10 @@ void TxnManager::reset() {
 	// MaaT & DTA & WKDB
 	greatest_write_timestamp = 0;
 	greatest_read_timestamp = 0;
-	commit_timestamp = 0;
+	commit_timestamp = UINT64_MAX;
+#if !NEW_COMMIT_TIME
     max_prepare_timestamp = 0;
+#endif
 
     start_rw_time = 0;
 	start_logging_time = 0;
@@ -637,21 +641,33 @@ RC TxnManager::start_commit(yield_func_t &yield, uint64_t cor_id) {
 #endif
 
 #if USE_REPLICA
-	send_prepare_messages();
+
 #if CC_ALG == MV_WOUND_WAIT || CC_ALG == MV_NO_WAIT
+
+#if NEW_COMMIT_TIME
+	this->set_commit_timestamp(glob_manager.get_ts(get_thd_id()));
+#else
     this->set_prepare_timestamp(glob_manager.get_ts(get_thd_id()));  
 	//直接更新本地最大prepare时间戳
     this->set_max_prepare_timestamp(this->get_prepare_timestamp());
+
 #endif
+#endif
+
+	send_prepare_messages();
+
 //本地事务的状态进入提交阶段中的prepa阶段
 #if !USE_TAPIR
 
-#if CLV == CLV3
+#if !NEW_COMMIT_TIME && CLV == CLV3
     if(this->query->partitions_touched.size() == 1){
         this->set_commit_timestamp(this->max_prepare_timestamp);
         this->retire(yield, cor_id);
         this->finish_retire = true;
     }
+#elif CLV == CLV4
+    this->retire(yield, cor_id);
+    this->finish_retire = true;
 #endif
 	if(has_local_write()){
 		log_replica(RLOG, g_node_id);
@@ -874,7 +890,7 @@ void TxnManager::send_prepare_messages() {
 }
 
 void TxnManager::send_colog_messages() {
-#if CLV != CLV3 && (CC_ALG == MV_NO_WAIT || CC_ALG == MV_WOUND_WAIT)
+#if !NEW_COMMIT_TIME && CLV != CLV3 && (CC_ALG == MV_NO_WAIT || CC_ALG == MV_WOUND_WAIT)
 	this->set_commit_timestamp(this->max_prepare_timestamp);
 #endif
 	rsp_cnt = 2;
@@ -1261,6 +1277,7 @@ void TxnManager::set_start_timestamp(uint64_t start_timestamp) {
 
 ts_t TxnManager::get_start_timestamp() { return txn->start_timestamp; }
 
+#if !NEW_COMMIT_TIME
 ts_t TxnManager::get_prepare_timestamp() { return txn->prepare_timestamp; }
 
 void TxnManager::set_max_prepare_timestamp(uint64_t prepare_timestamp){
@@ -1268,6 +1285,7 @@ void TxnManager::set_max_prepare_timestamp(uint64_t prepare_timestamp){
           max_prepare_timestamp = prepare_timestamp;
     }
 }
+#endif
 uint64_t TxnManager::incr_lr() {
 	//ATOM_ADD(this->rsp_cnt,i);
 	uint64_t result;
@@ -1417,7 +1435,7 @@ void TxnManager::cleanup(yield_func_t &yield, RC rc, uint64_t cor_id) {
 		cleanup_row(yield, rc,rid,remote_access,cor_id);  //return abort write row
 	}
 	//在这里将依赖清理，不在行里面清理，在这里是这个事务的所有行都提交完，加入历史，或者回滚后直接释放，在这之后将依赖与这个事务的事务进行唤醒
-#if (CC_ALG == MV_NO_WAIT || CC_ALG == MV_WOUND_WAIT) && (CLV == CLV2 || CLV == CLV3)
+#if (CC_ALG == MV_NO_WAIT || CC_ALG == MV_WOUND_WAIT) && (CLV == CLV2 || CLV == CLV3 || CLV == CLV4)
 	if(rc == RCOK){
 		assert(this->inconflict == 0);
 	}

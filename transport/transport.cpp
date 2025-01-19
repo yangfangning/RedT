@@ -241,14 +241,14 @@ Socket * Transport::connect(uint64_t dest_id,uint64_t port_id) {
   return socket;
 }
 
-void Transport::init() {
+void Transport::init() {//初始化传输函数
 	_sock_cnt = get_socket_count();
 
 	rr = 0;
 	printf("Tport Init %d: %ld\n",g_node_id,_sock_cnt);
 
  	string path = get_path();
-	read_ifconfig(path.c_str());
+	read_ifconfig(path.c_str());//读取ip地址进行绑定
 
   for(uint64_t node_id = 0; node_id < g_total_node_cnt; node_id++) {
 

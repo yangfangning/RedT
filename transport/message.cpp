@@ -1146,6 +1146,9 @@ uint64_t PrepareMessage::get_size() {
 #if CC_ALG == TICTOC
   size += sizeof(uint64_t);
 #endif
+#if NEW_COMMIT_TIME && (CC_ALG == MV_WOUND_WAIT || CC_ALG == MV_NO_WAIT)
+  size += sizeof(uint64_t);
+#endif
   return size;
 }
 
@@ -1154,6 +1157,10 @@ void PrepareMessage::copy_from_txn(TxnManager * txn) {
 #if CC_ALG == TICTOC
   _min_commit_ts = txn->_min_commit_ts;
 #endif
+#if NEW_COMMIT_TIME && (CC_ALG == MV_WOUND_WAIT || CC_ALG == MV_NO_WAIT)
+  commit_timestamp = txn->commit_timestamp;
+#endif
+
 }
 void PrepareMessage::copy_to_txn(TxnManager * txn) {
   Message::mcopy_to_txn(txn);
@@ -1164,6 +1171,9 @@ void PrepareMessage::copy_from_buf(char * buf) {
 #if CC_ALG == TICTOC
   COPY_VAL(_min_commit_ts,buf,ptr);
 #endif
+#if NEW_COMMIT_TIME && (CC_ALG == MV_WOUND_WAIT || CC_ALG == MV_NO_WAIT)
+  COPY_VAL(commit_timestamp,buf,ptr);
+#endif
   assert(ptr == get_size());
 }
 
@@ -1172,6 +1182,9 @@ void PrepareMessage::copy_to_buf(char * buf) {
   uint64_t ptr = Message::mget_size();
 #if CC_ALG == TICTOC
   COPY_BUF(buf,_min_commit_ts,ptr);
+#endif
+#if NEW_COMMIT_TIME && (CC_ALG == MV_WOUND_WAIT || CC_ALG == MV_NO_WAIT)
+  COPY_BUF(buf,commit_timestamp,ptr);
 #endif
   assert(ptr == get_size());
 }
@@ -1221,7 +1234,7 @@ void AckMessage::copy_from_txn(TxnManager * txn) {
   PPSQuery* pps_query = (PPSQuery*)(txn->query);
   part_keys.copy(pps_query->part_keys);
 #endif
-#if CC_ALG == MV_WOUND_WAIT || CC_ALG == MV_NO_WAIT
+#if !NEW_COMMIT_TIME && ( CC_ALG == MV_WOUND_WAIT || CC_ALG == MV_NO_WAIT )
   prepare_timestamp = txn->get_prepare_timestamp();
 #endif
 }
@@ -1258,7 +1271,7 @@ void AckMessage::copy_from_buf(char * buf) {
     part_keys.add(item);
   }
 #endif
-#if CC_ALG == MV_WOUND_WAIT || CC_ALG == MV_NO_WAIT
+#if !NEW_COMMIT_TIME && ( CC_ALG == MV_WOUND_WAIT || CC_ALG == MV_NO_WAIT )
   COPY_VAL(prepare_timestamp,buf,ptr);
 #endif
  assert(ptr == get_size());
@@ -1284,7 +1297,7 @@ void AckMessage::copy_to_buf(char * buf) {
     COPY_BUF(buf,item,ptr);
   }
 #endif
-#if CC_ALG == MV_WOUND_WAIT || CC_ALG == MV_NO_WAIT
+#if !NEW_COMMIT_TIME && ( CC_ALG == MV_WOUND_WAIT || CC_ALG == MV_NO_WAIT )
   COPY_BUF(buf,prepare_timestamp,ptr);
 #endif
  assert(ptr == get_size());

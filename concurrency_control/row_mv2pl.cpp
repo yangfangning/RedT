@@ -111,7 +111,12 @@ RC Row_mv2pl::access(TxnManager * txn, lock_t type, row_t * row) {
             //有上锁事务，
             if (whis == NULL || whis->ts < start_ts){//可能能读到未提交的数据
                 //当本地时间戳没确定时直接跳过，说明处于运行状态，当确定后还小于开始时间戳，等待，本地提交时间戳大于开始时间戳的话说明读不到新建的版本，跳过，对于终止的事务，终止时是状态先确定还是
+#if NEW_COMMIT_TIME
+                //如果有上锁事务，且可能读到该事务的数据，如果提交时间戳为0，说明提交时间戳还未确定，可以直接读旧数据，如果提交时间戳确定，但是小于开始时间戳，但是该事务还没退休，就需要等待其提交。如果开始时间戳，小于提交时间戳，就直接读旧数据。当提交时间戳没确定或者大于开始时间戳时，表示读不到，直接跳过。需要将提交时间戳的初始值设为最大值
+                if(owner->txn->get_commit_timestamp() <= start_ts){
+#else
                 if(owner->txn->get_prepare_timestamp() <= start_ts){
+#endif                    
                     DEBUG_T("txn %ld need wait %ld co/xp\n", txn->get_txn_id(),owner->txn->get_txn_id());
                     Mv2plEntry * entry = create_2pl_entry();
                     entry->start_ts = start_ts;
@@ -136,7 +141,7 @@ RC Row_mv2pl::access(TxnManager * txn, lock_t type, row_t * row) {
         row_t * ret = (whis == NULL) ? _row : whis->row;//这里有隐患，当读事务是非常老的事务，但是写版本已经被清理了，可能会去读最开始的版本
         //增加依赖，当读的是一个未提交的数据且不为空
         DEBUG_T("txn %ld begin read\n", txn->get_txn_id());
-#if CLV == CLV2 || CLV == CLV3
+#if CLV == CLV2 || CLV == CLV3 || CLV == CLV4
         if( whis && !whis->commited){
             //读的数据不为空,且没提交增加依赖
             //前驱事务加依赖
@@ -166,7 +171,7 @@ RC Row_mv2pl::access(TxnManager * txn, lock_t type, row_t * row) {
             rc = Abort;
             txn->set_rc(rc);
             DEBUG_T("txn %ld abort because ts little \n", txn->get_txn_id());
-#if CLV == CLV2 || CLV == CLV3 
+#if CLV == CLV2 || CLV == CLV3  || CLV == CLV4 
             ATOM_CAS(txn->prep_ready, false, true);
             ATOM_CAS(txn->need_prep_cont, true, false);
             ATOM_CAS(txn->inconflict,txn->inconflict,-1);
@@ -222,7 +227,7 @@ RC Row_mv2pl::access(TxnManager * txn, lock_t type, row_t * row) {
                         row_t * ret = (writehistail == NULL) ? _row : writehistail->row;
                         txn->cur_row = ret;
                         Mv2plhisEntry * whis =  writehistail;
-#if CLV == CLV2 || CLV == CLV3
+#if CLV == CLV2 || CLV == CLV3  || CLV == CLV4
                         if( whis && !whis->commited){
                             //读的数据不为空,且没提交增加依赖
                             //前驱事务加依赖
@@ -315,7 +320,7 @@ RC Row_mv2pl::access(TxnManager * txn, lock_t type, row_t * row) {
                 DEBUG_T("txn %ld need abort because owner come other \n", txn->get_txn_id(),owner->txn->get_txn_id());
                 rc = Abort;
                 txn->set_rc(rc);
-#if CLV == CLV2 || CLV == CLV3 
+#if CLV == CLV2 || CLV == CLV3  || CLV == CLV4 
                 ATOM_CAS(txn->prep_ready, false, true);
                 ATOM_CAS(txn->need_prep_cont, true, false);
                 ATOM_CAS(txn->inconflict,txn->inconflict,-1);
@@ -328,7 +333,7 @@ RC Row_mv2pl::access(TxnManager * txn, lock_t type, row_t * row) {
 
             rc = Abort;
             txn->set_rc(rc);
-#if CLV == CLV2 || CLV == CLV3 
+#if CLV == CLV2 || CLV == CLV3  || CLV == CLV4 
             ATOM_CAS(txn->prep_ready, false, true);
             ATOM_CAS(txn->need_prep_cont, true, false);
             ATOM_CAS(txn->inconflict,txn->inconflict,-1);
@@ -350,7 +355,7 @@ RC Row_mv2pl::access(TxnManager * txn, lock_t type, row_t * row) {
             owner = entry;
             row_t * ret = (writehistail == NULL) ? _row : writehistail->row;
             txn->cur_row = ret;
-#if CLV == CLV2 || CLV == CLV3
+#if CLV == CLV2 || CLV == CLV3 || CLV == CLV4
                 Mv2plhisEntry * whis = writehistail;
                 if( whis && !whis->commited){       
                     ONCONFLICT * conflict = whis->txn->creat_on_entry();
@@ -411,7 +416,7 @@ void Row_mv2pl::lock_release(TxnManager * txn, lock_t type){
           release_2pl_entry(retire);
         }
 #else
-#if CLV == CLV2 || CLV == CLV3
+#if CLV == CLV2 || CLV == CLV3  || CLV == CLV4
         //判断回滚的事务是否是拥有者，是的话不用清理历史了，否则要清理历史
         //不是拥有者
         if (owner == NULL || txn->get_txn_id() != owner->txn->get_txn_id()){
@@ -513,7 +518,7 @@ void Row_mv2pl::lock_release(TxnManager * txn, lock_t type){
                     owner = entry;
                     //设置唤醒后事务的要获取的行数据
                     entry->txn->cur_row = (writehistail == NULL) ? _row : writehistail->row;
-#if CLV == CLV2 || CLV == CLV3
+#if CLV == CLV2 || CLV == CLV3 || CLV == CLV4
                     if( writehistail && !writehistail->commited){
                         //读的数据不为空,且没提交增加依赖
                         //前驱事务加依赖
@@ -546,7 +551,7 @@ void Row_mv2pl::lock_release(TxnManager * txn, lock_t type){
             }
         }
     }else{//如果是提交操作，说明已经退休过了，只需要解除依赖就可以了
-#if CLV == CLV2 || CLV == CLV3
+#if CLV == CLV2 || CLV == CLV3 || CLV == CLV4
         //将他写的历史版本的标志设为true
         assert(retire_head);
         assert(retire_head->txn->get_txn_id() == txn->get_txn_id());
@@ -584,7 +589,7 @@ void Row_mv2pl::retire(TxnManager * txn, row_t * row) {
 
     max_retire_cts = txn->get_commit_timestamp();//加到插入历史数据里吧
     insert_history(max_retire_cts, txn , row);
-#if CLV == CLV2 || CLV == CLV3
+#if CLV == CLV2 || CLV == CLV3 || CLV == CLV4
     assert(writehistail);
     assert(!writehistail->commited);
     if(!retire_head){
@@ -617,7 +622,7 @@ void Row_mv2pl::retire(TxnManager * txn, row_t * row) {
         }
         entry->txn->cur_row = (whis == NULL) ? _row : whis->row;
         //这里唤醒后应该加依赖的
-#if CLV == CLV2 || CLV == CLV3
+#if CLV == CLV2 || CLV == CLV3 || CLV == CLV4
         if( whis && !whis->commited){
             //读的数据不为空,且没提交增加依赖
             //前驱事务加依赖
@@ -655,7 +660,7 @@ void Row_mv2pl::retire(TxnManager * txn, row_t * row) {
         LIST_GET_HEAD(waiters_head,waiters_tail,entry);
         if (entry->start_ts < max_retire_cts || entry->txn->get_rc() == Abort) {
             entry->txn->set_rc(Abort);
-#if CLV == CLV2 || CLV == CLV3
+#if CLV == CLV2 || CLV == CLV3 || CLV == CLV4
             ATOM_CAS(entry->txn->prep_ready, false, true);
             ATOM_CAS(entry->txn->need_prep_cont, true, false);
             ATOM_CAS(entry->txn->inconflict,entry->txn->inconflict,-1);
@@ -677,7 +682,7 @@ void Row_mv2pl::retire(TxnManager * txn, row_t * row) {
             owner = entry;
             //设置唤醒后事务的要获取的行数据
             entry->txn->cur_row = writehistail->row;
-#if CLV == CLV2 || CLV == CLV3
+#if CLV == CLV2 || CLV == CLV3 || CLV == CLV4
             if( writehistail && !writehistail->commited){
                 //读的数据不为空,且没提交增加依赖
                 //前驱事务加依赖
@@ -760,7 +765,7 @@ void Row_mv2pl::clean_wait(TxnManager * txn, lock_t type){
               owner = entry;
               // 设置唤醒后事务的要获取的行数据
               entry->txn->cur_row = (writehistail == NULL) ? _row : writehistail->row;
-#if CLV == CLV2 || CLV == CLV3
+#if CLV == CLV2 || CLV == CLV3 || CLV == CLV4
                 if( writehistail && !writehistail->commited){
                     //读的数据不为空,且没提交增加依赖
                     //前驱事务加依赖
