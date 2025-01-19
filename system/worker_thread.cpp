@@ -541,7 +541,7 @@ DEBUG_T("clv2退休\n");
   
   if(((FinishMessage*)msg)->rc == Abort) {
 	  // printf("xxx txn %lu send rack_fin, rc = %d\n", txn_man->get_txn_id(), txn_man->get_rc());
-#if CLV == CLV2 || CLV == CLV3 
+#if CLV == CLV2 || CLV == CLV3 || CLV == CLV4 
     ATOM_CAS(txn_man->prep_ready, false, true);
     ATOM_CAS(txn_man->need_prep_cont, true, false);
     ATOM_CAS(txn_man->inconflict,txn_man->inconflict,-1);
@@ -616,7 +616,7 @@ RC WorkerThread::process_rack_log(yield_func_t &yield, Message * msg, uint64_t c
       if(txn_man->get_rsp_cnt() > 0) return WAIT;//如果远程prepare还没回应完，等待
 
 #if CC_ALG == MV_NO_WAIT || CC_ALG == MV_WOUND_WAIT
-#if CLV == CLV2 || CLV == CLV3
+#if CLV == CLV2 || CLV == CLV3 || CLV == CLV4
       //验证事务，写完prepare日志后验证
         if (ATOM_CAS(txn_man->prep_ready,false,false) && txn_man->get_rc() == RCOK){
           assert(txn_man->txn_state == PREPARE);
@@ -679,7 +679,7 @@ RC WorkerThread::process_rack_log(yield_func_t &yield, Message * msg, uint64_t c
     }else{
       DEBUG_T("%d:%d send rack prep to %d\n", g_node_id, txn_man->get_txn_id(), txn_man->get_return_node());
 #if CC_ALG == MV_WOUND_WAIT || CC_ALG == MV_NO_WAIT
-#if CLV == CLV2 || CLV == CLV3
+#if CLV == CLV2 || CLV == CLV3 || CLV == CLV4
       //验证事务，写完prepare日志后验证
         if (ATOM_CAS(txn_man->prep_ready,false,false) && txn_man->get_rc() == RCOK){
           assert(txn_man->txn_state == PREPARE);
@@ -818,6 +818,7 @@ RC WorkerThread::process_rack_fin_log(yield_func_t &yield, Message * msg, uint64
 }
 
 RC WorkerThread::process_rack_pre_prep(yield_func_t &yield, Message * msg, uint64_t cor_id) {
+#if CLV == CLV3 
   RC rc = RCOK;
   int responses_left = 0;
 
@@ -827,7 +828,7 @@ RC WorkerThread::process_rack_pre_prep(yield_func_t &yield, Message * msg, uint6
   }
   responses_left = txn_man->received_pre_response(((AckMessage*)msg)->rc);
   //计算最大提交时间戳，这里只有这种并发控制才有,本地的在txn中直接生成并计算了
-#if CC_ALG == MV_NO_WAIT || CC_ALG == MV_WOUND_WAIT
+#if !NEW_COMMIT_TIME && (CC_ALG == MV_NO_WAIT || CC_ALG == MV_WOUND_WAIT)
   txn_man->set_max_prepare_timestamp(((AckMessage*)msg)->prepare_timestamp);
 #endif
   assert(responses_left >= 0);
@@ -836,12 +837,16 @@ RC WorkerThread::process_rack_pre_prep(yield_func_t &yield, Message * msg, uint6
   if(txn_man->get_rc() != Abort) {
     //设置提交时间戳，发送消息
     DEBUG_T("%d:%d send commit ts to %d\n", g_node_id, msg->get_txn_id(),txn_man->get_return_node());
+#if !NEW_COMMIT_TIME
     txn_man->set_commit_timestamp(txn_man->max_prepare_timestamp);
+#endif
     txn_man->send_co_ts_messages();
     txn_man->retire(yield, cor_id);
     txn_man->finish_retire = true;
-  } 
+  }
+ 
   return rc;
+#endif
 }
 
 
@@ -872,9 +877,13 @@ RC WorkerThread::process_rack_prep(yield_func_t &yield, Message * msg, uint64_t 
   responses_left = txn_man->received_response(((AckMessage*)msg)->rc);
   //计算最大提交时间戳，这里只有这种并发控制才有,本地的在txn中直接生成并计算了
 #if CC_ALG == MV_NO_WAIT || CC_ALG == MV_WOUND_WAIT
+#if !NEW_COMMIT_TIME
+
 	txn_man->set_max_prepare_timestamp(((AckMessage*)msg)->prepare_timestamp);
+#endif
   //prepare发送的消息是终止的话，将本地的事务的相关设置设为该回滚时的情况
-#if CLV == CLV2 || CLV == CLV3
+
+#if CLV == CLV2 || CLV == CLV3 || CLV == CLV4
   if(((AckMessage*)msg)->rc == Abort){
     if(ATOM_CAS(txn_man->prep_ready, false, true)){
       ATOM_CAS(txn_man->inconflict, txn_man->inconflict, -1);
@@ -971,7 +980,7 @@ assert(responses_left >= 0);
 
 
 #if CC_ALG == MV_NO_WAIT || CC_ALG == MV_WOUND_WAIT
-#if CLV == CLV2 || CLV == CLV3
+#if CLV == CLV2 || CLV == CLV3 || CLV == CLV4
       //验证事务，写完prepare日志后验证
         if (ATOM_CAS(txn_man->prep_ready,false,false) && txn_man->get_rc() == RCOK){
           assert(txn_man->txn_state == PREPARE);
@@ -1303,8 +1312,19 @@ RC WorkerThread::process_rprepare(yield_func_t &yield, Message * msg, uint64_t c
 //生成本地提交时间戳
 #if CC_ALG == MV_WOUND_WAIT || CC_ALG == MV_NO_WAIT
   txn_man->txn_state = PREPARE;
+
   if(txn_man->has_local_write()){
+#if NEW_COMMIT_TIME
+    txn_man->set_commit_timestamp(((PrepareMessage*)msg)->commit_timestamp);
+#if CLV == CLV4
+    //设置提交时间戳，发送消息
+    txn_man->retire(yield, cor_id);
+    txn_man->finish_retire = true;
+#endif
+#else
     txn_man->set_prepare_timestamp(get_next_ts());
+#endif
+    
 //clv3验证
 #if CLV == CLV3
 DEBUG_T("远程写事务提前发送消息给协调者\n");
@@ -1315,12 +1335,16 @@ DEBUG_T("远程写事务提前发送消息给协调者\n");
     rc = WAIT_REM;
     return rc;
   }else{
+#if NEW_COMMIT_TIME
+    txn_man->set_commit_timestamp(((PrepareMessage*)msg)->commit_timestamp);
+#else
     txn_man->set_prepare_timestamp(txn_man->get_start_timestamp());
+#endif
 #if CLV == CLV3
     DEBUG_T("%d:%d send rack_pre_prep ack to %d\n", g_node_id, msg->get_txn_id(),msg->return_node_id);
     msg_queue.enqueue(get_thd_id(), Message::create_message(txn_man,RACK_PRE_PREP),msg->return_node_id);
 #endif
-#if CLV == CLV2 || CLV == CLV3
+#if CLV == CLV2 || CLV == CLV3 || CLV == CLV4
       //验证事务，写完prepare日志后验证
         if (ATOM_CAS(txn_man->prep_ready,false,false) && txn_man->get_rc() == RCOK){
           assert(txn_man->txn_state == PREPARE);

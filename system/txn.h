@@ -64,7 +64,9 @@ public:
 	uint64_t timestamp;
 	// For OCC and SSI
 	uint64_t start_timestamp;
+#if !NEW_COMMIT_TIME
 	uint64_t prepare_timestamp;
+#endif
 	uint64_t end_timestamp;
 
 	uint64_t write_cnt;
@@ -264,11 +266,15 @@ public:
 	uint64_t get_batch_id() {return txn->batch_id;}
 	void set_batch_id(uint64_t batch_id) {txn->batch_id = batch_id;}
 	//for mv2pl
+#if !NEW_COMMIT_TIME
 	void set_prepare_timestamp(uint64_t prepare_timestamp){txn->prepare_timestamp = prepare_timestamp;}
-    uint64_t max_prepare_timestamp;
-	ts_t get_prepare_timestamp();
-	void set_max_prepare_timestamp(uint64_t prepare_timestamp);
 
+    uint64_t max_prepare_timestamp;
+
+	ts_t get_prepare_timestamp();
+
+	void set_max_prepare_timestamp(uint64_t prepare_timestamp);
+#endif
 		// For MaaT
 	uint64_t commit_timestamp;
 	uint64_t get_commit_timestamp() {return commit_timestamp;}

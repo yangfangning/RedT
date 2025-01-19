@@ -190,7 +190,7 @@ public:
 #if CC_ALG == SILO
   uint64_t max_tid;
 #endif
-#if CC_ALG == MV_WOUND_WAIT || CC_ALG == MV_NO_WAIT
+#if !NEW_COMMIT_TIME && ( CC_ALG == MV_WOUND_WAIT || CC_ALG == MV_NO_WAIT )
   uint64_t prepare_timestamp;
 #endif
 
@@ -212,6 +212,11 @@ public:
   RC rc;
 #if CC_ALG == TICTOC
   uint64_t _min_commit_ts;
+#endif
+
+#if NEW_COMMIT_TIME && (CC_ALG == MV_WOUND_WAIT || CC_ALG == MV_NO_WAIT)
+  uint64_t commit_timestamp;
+  bool readonly;
 #endif
   uint64_t txn_id;
 };
