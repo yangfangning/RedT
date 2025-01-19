@@ -1091,7 +1091,7 @@ def ycsb_cross_dc1():
     wl = 'YCSB'
     nnodes = [3]
     algos=['MV_WOUND_WAIT','MV_NO_WAIT']
-    clvs=['CLV1','CLV2','CLV3']
+    clvs=['CLV1','CLV2','CLV3', 'CLV4']
     tapir=['false']
     early=['false']
     base_table_size=1048576
@@ -1116,7 +1116,7 @@ def ycsb_dcs():
     # nnodes = [15]
     nnodes = [3]
     algos=['MV_WOUND_WAIT','MV_NO_WAIT']
-    clvs=['CLV1','CLV2','CLV3']
+    clvs=['CLV1','CLV2','CLV3', 'CLV4']
     tapir=['false']
     early=['false']
     # load = [10000,12000]
@@ -1140,7 +1140,7 @@ def tpcc_thread():
     #nnodes = [1,2,4,8,16,32]
     nnodes = [3]
     algos=['MV_WOUND_WAIT','MV_NO_WAIT']
-    clvs=['CLV1','CLV2','CLV3']
+    clvs=['CLV1','CLV2','CLV3', 'CLV4']
 
     npercpay=[0.0]
     # npercpay=[1.0]
@@ -1165,7 +1165,7 @@ def ycsb_writes():
     algos=['MV_NO_WAIT','MV_WOUND_WAIT']
     tapir=['false']
     early=['false']
-    clvs=['CLV1','CLV2','CLV3']
+    clvs=['CLV1','CLV2','CLV3', 'CLV4']
     base_table_size=1048576
     # txn_write_perc = [0.0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1.0]
     txn_write_perc = [1]
@@ -1182,7 +1182,7 @@ def ycsb_skew():
     wl = 'YCSB'
     nnodes = [3]
     algos=['MV_NO_WAIT','MV_WOUND_WAIT']
-    clvs=['CLV1','CLV2','CLV3']
+    clvs=['CLV1','CLV2','CLV3', 'CLV4']
     tapir=['false']
     early=['false']
     
@@ -1205,7 +1205,7 @@ def ycsb_network_delay():
     wl = 'YCSB'
     nnodes = [3]
     algos=['MV_WOUND_WAIT','MV_NO_WAIT']
-    clvs=['CLV1','CLV2','CLV3']
+    clvs=['CLV1','CLV2','CLV3', 'CLV4']
     tapir=['false']
     early=['false']
     base_table_size=1048576
@@ -1229,7 +1229,7 @@ def ycsb_hot():
     wl = 'YCSB'
     nnodes = [3]
     algos=['MV_WOUND_WAIT','MV_NO_WAIT']
-    clvs=['CLV1','CLV2','CLV3']
+    clvs=['CLV1','CLV2','CLV3', 'CLV4']
     tapir=['false']
     early=['false']
     hot = 'HOT'
@@ -1254,7 +1254,7 @@ def ycsb_cross_dc():
     wl = 'YCSB'
     nnodes = [3]
     algos=['MV_WOUND_WAIT','MV_NO_WAIT']
-    clvs=['CLV1','CLV2','CLV3']
+    clvs=['CLV1','CLV2','CLV3', 'CLV4']
     tapir=['false']
     early=['false']
     hot = 'HOT'
@@ -1279,7 +1279,7 @@ def tpcc_cross_dc():
     wl = 'TPCC'
     nnodes = [3]
     nalgos=['MV_WOUND_WAIT','MV_NO_WAIT']
-    clvs=['CLV1','CLV2','CLV3']
+    clvs=['CLV1','CLV2','CLV3', 'CLV4']
     npercpay=[0.0]
     wh=64
     mpr = [0.0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1.0]
@@ -1298,7 +1298,7 @@ def tpcc_wh():
     wl = 'TPCC'
     nnodes = [3]
     nalgos=['MV_WOUND_WAIT','MV_NO_WAIT']
-    clvs=['CLV1','CLV2','CLV3']
+    clvs=['CLV1','CLV2','CLV3', 'CLV4']
     npercpay=[0.0]
     wh=[10,20,30,40,50,60,70,80,100]
     # wh=64
@@ -1315,7 +1315,7 @@ def tpcc_neworder_payment():
     wl = 'TPCC'
     nnodes = [3]
     nalgos=['MV_WOUND_WAIT','MV_NO_WAIT']
-    clvs=['CLV1','CLV2','CLV3']
+    clvs=['CLV1','CLV2','CLV3', 'CLV4']
     npercpay=[0.0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1.0]
     wh=64
     # wh=64
