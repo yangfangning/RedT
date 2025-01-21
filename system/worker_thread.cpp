@@ -594,10 +594,6 @@ RC WorkerThread::process_rlog(yield_func_t &yield, Message * msg, uint64_t cor_i
 RC WorkerThread::process_rack_log(yield_func_t &yield, Message * msg, uint64_t cor_id) {
   RC rc = RCOK;
   DEBUG_T("RACK_LOG %ld from %ld\n",msg->get_txn_id(),msg->return_node_id);
-  if (!txn_man || !(txn_man->txn) || !txn_man->query || txn_man->query->partitions_touched.size() == 0 || txn_man->abort_cnt != msg->current_abort_cnt) {
-    DEBUG_T("RPREP_log skip %ld from %ld\n",msg->get_txn_id(),msg->get_return_id());
-    return RCOK;
-  }
   int responses_left = txn_man->received_log_response(((AckMessage*)msg)->rc);
   // if(txn_man->get_return_node() == g_node_id){
   uint64_t prepare_message_timespan  = get_sys_clock() - txn_man->txn_stats.log_start_time;
@@ -1323,7 +1319,13 @@ RC WorkerThread::process_rprepare(yield_func_t &yield, Message * msg, uint64_t c
 #if CC_ALG == MV_WOUND_WAIT || CC_ALG == MV_NO_WAIT
   txn_man->txn_state = PREPARE;
   if(txn_man->get_rc() == Abort){
-    msg_queue.enqueue(get_thd_id(), Message::create_message(txn_man,RACK_PREP),txn_man->get_return_node());
+    if(msg->return_node_id == g_node_id){
+      txn_man->send_finish_messages();
+      txn_man->abort(yield, cor_id);
+    }else{
+      msg_queue.enqueue(get_thd_id(), Message::create_message(txn_man,RACK_PREP),msg->return_node_id);
+    }
+    
     return RCOK;
 
   }

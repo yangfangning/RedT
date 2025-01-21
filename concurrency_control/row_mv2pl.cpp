@@ -422,14 +422,21 @@ void Row_mv2pl::lock_release(TxnManager * txn, lock_t type){
         if (owner == NULL || txn->get_txn_id() != owner->txn->get_txn_id()){
             DEBUG_T("级联终止 %ld\n");
             DEBUG_T("txn %ld not owner\n", txn->get_txn_id());
-            Mv2plhisEntry * entry = writehistail;
-            //找到要清理的版本，要清理的版本，要满足事务id能对上
-            while (entry != NULL && entry->txn->get_txn_id() != txn->get_txn_id() && !entry->commited) {
-                //说明这个事务在这行上写的历史已经被清理，不需要进行其他操作了，也不需要唤醒等待者
-                entry = entry->next;
+            //处理退休的头，如果回滚的事务时退休的头，需要将退休的头更新为空，因为回滚会导致后面的事务以及拥有者都回滚，如果头不是当前事务，说明当前事务是在退休的头后面的事务，或者已经被清理了，退休的头已经更新了。
+            Mv2plhisEntry * entry = retire_head;
+            if(retire_head && txn->get_txn_id() == retire_head->txn->get_txn_id()){//如果退休的头是回滚的事务，需要将后续的事务进行回滚
+                DEBUG_T("update retire_head\n");
+                retire_head = NULL; 
+            }else if (retire_head)//如果退休的头不是回滚的事务，找到回滚的事务是哪个
+            {
+                while (entry != NULL && entry->txn->get_txn_id() != txn->get_txn_id() ) {
+                    //说明这个事务在这行上写的历史已经被清理，不需要进行其他操作了，也不需要唤醒等待者
+                    entry = entry->prev;
+                }
             }
-            //如果不为空且id能对上
-            if (entry != NULL && entry->txn->get_txn_id() == txn->get_txn_id()){
+
+            //如果不为空，说明要不就是是退休的头，要不就是找到了要退休的哪个事务版本
+            if (entry){
                 DEBUG_T("cleanr history\n");     
                 //历史没有被清理，找到了这个事务，解除依赖，并将后续历史给清理了
                 max_retire_cts = max_cts;
@@ -458,7 +465,7 @@ void Row_mv2pl::lock_release(TxnManager * txn, lock_t type){
                 }
 
             }
-        }else{//是拥有者，删除拥有者
+        }else{//是拥有者，说明还没退休，删除拥有者即可
             owner = NULL;
             release_2pl_entry(retire);
         }
