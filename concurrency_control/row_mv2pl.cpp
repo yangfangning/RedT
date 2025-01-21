@@ -447,13 +447,16 @@ void Row_mv2pl::lock_release(TxnManager * txn, lock_t type){
                   whis_len--;//历史长度减一
                 }
                 //要清理的还在历史里时，拥有者应该也要被清理，但是此时拥有者还没有加上依赖，所以，需要将其设为回滚
-                owner->txn->set_rc(Abort);
-                DEBUG_T("txn %ld need abort\n", owner->txn->get_txn_id());
-                ATOM_CAS(owner->txn->inconflict,owner->txn->inconflict,-1);
-                ATOM_CAS(owner->txn->prep_ready, false, true);
-                ATOM_CAS(owner->txn->need_prep_cont, true, false);
-                owner = NULL;
-                release_2pl_entry(retire);
+                if(owner != NULL){
+                    owner->txn->set_rc(Abort);
+                    DEBUG_T("txn %ld need abort\n", owner->txn->get_txn_id());
+                    ATOM_CAS(owner->txn->inconflict,owner->txn->inconflict,-1);
+                    ATOM_CAS(owner->txn->prep_ready, false, true);
+                    ATOM_CAS(owner->txn->need_prep_cont, true, false);
+                    owner = NULL;
+                    release_2pl_entry(retire);
+                }
+
             }
         }else{//是拥有者，删除拥有者
             owner = NULL;
@@ -593,6 +596,7 @@ void Row_mv2pl::retire(TxnManager * txn, row_t * row) {
     assert(writehistail);
     assert(!writehistail->commited);
     if(!retire_head){
+        DEBUG_T("txn %ld become %lx retire_head\n ", txn->get_txn_id(),(uint64_t)row);
         retire_head = writehistail;
     }
 #endif

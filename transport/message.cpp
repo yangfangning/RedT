@@ -1204,7 +1204,7 @@ uint64_t AckMessage::get_size() {
   size += sizeof(size_t);
   size += sizeof(uint64_t) * part_keys.size();
 #endif
-#if CC_ALG == MV_WOUND_WAIT || CC_ALG == MV_NO_WAIT
+#if !NEW_COMMIT_TIME && ( CC_ALG == MV_WOUND_WAIT || CC_ALG == MV_NO_WAIT )
   size += sizeof(uint64_t);
 #endif
   return size;
