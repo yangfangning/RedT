@@ -149,6 +149,7 @@ RC Row_mv2pl::access(TxnManager * txn, lock_t type, row_t * row) {
             entry->txn_id = txn->get_txn_id();
             entry->abort_cnt = txn->abort_cnt;
             entry->next = NULL;
+            entry->type = 0;
             if(whis->txn->onconflicthead){
               whis->txn->onconflicttail->next = entry;
               whis->txn->onconflicttail = entry;
@@ -235,6 +236,7 @@ RC Row_mv2pl::access(TxnManager * txn, lock_t type, row_t * row) {
                             conflict->txn_id = entry->txn->get_txn_id();
                             conflict->abort_cnt = entry->txn->abort_cnt;
                             conflict->next = NULL;
+                            conflict->type = 1;
                             if(whis->txn->onconflicthead){
                             whis->txn->onconflicttail->next = conflict;
                             whis->txn->onconflicttail = conflict;
@@ -362,6 +364,7 @@ RC Row_mv2pl::access(TxnManager * txn, lock_t type, row_t * row) {
                     conflict->txn_id = txn->get_txn_id();
                     conflict->abort_cnt = txn->abort_cnt;
                     conflict->next = NULL;
+                    conflict->type = 1;
                     if(whis->txn->onconflicthead){
                         whis->txn->onconflicttail->next = conflict;
                         whis->txn->onconflicttail = conflict;
@@ -426,7 +429,11 @@ void Row_mv2pl::lock_release(TxnManager * txn, lock_t type){
             Mv2plhisEntry * entry = retire_head;
             if(retire_head && txn->get_txn_id() == retire_head->txn->get_txn_id()){//如果退休的头是回滚的事务，需要将后续的事务进行回滚
                 DEBUG_T("update retire_head\n");
+#if NEW_ABORT
+                retire_head = entry->prev;
+#else
                 retire_head = NULL; 
+#endif
             }else if (retire_head)//如果退休的头不是回滚的事务，找到回滚的事务是哪个
             {
                 while (entry != NULL && entry->txn->get_txn_id() != txn->get_txn_id() ) {
@@ -439,12 +446,30 @@ void Row_mv2pl::lock_release(TxnManager * txn, lock_t type){
             if (entry){
                 DEBUG_T("cleanr history\n");     
                 //历史没有被清理，找到了这个事务，解除依赖，并将后续历史给清理了
-                max_retire_cts = max_cts;
+#if NEW_ABORT
+                if(entry->next == NULL){
+                    writehis = entry->prev;
+                }
+                if (entry->prev == NULL)
+                {
+                    writehistail = entry->next;
+                    if(writehistail){
+                        max_retire_cts = writehistail->ts;
+                    }else{
+                        max_retire_cts = 0;
+                    }
+                }
+                LIST_REMOVE(entry);
+                release_2pl_hisentry2(entry);
+                whis_len--;//历史长度减一
+#else
                 if (entry->next == NULL){
                   writehistail = NULL;
                   writehis = NULL;
                 }else{
                   writehistail = entry->next;
+                  max_retire_cts->prev = NULL;
+                  max_retire_cts = entry->next->ts;
                 }
                 Mv2plhisEntry * prev;
                 while(entry != NULL){
@@ -452,7 +477,8 @@ void Row_mv2pl::lock_release(TxnManager * txn, lock_t type){
                   entry = entry->prev;
                   release_2pl_hisentry2(prev);
                   whis_len--;//历史长度减一
-                }
+                }               
+
                 //要清理的还在历史里时，拥有者应该也要被清理，但是此时拥有者还没有加上依赖，所以，需要将其设为回滚
                 if(owner != NULL){
                     owner->txn->set_rc(Abort);
@@ -463,6 +489,7 @@ void Row_mv2pl::lock_release(TxnManager * txn, lock_t type){
                     owner = NULL;
                     release_2pl_entry(retire);
                 }
+#endif
 
             }
         }else{//是拥有者，说明还没退休，删除拥有者即可
@@ -536,6 +563,7 @@ void Row_mv2pl::lock_release(TxnManager * txn, lock_t type){
                         conflict->txn_id = entry->txn->get_txn_id();
                         conflict->abort_cnt = entry->txn->abort_cnt;
                         conflict->next = NULL;
+                        conflict->type = 1;
                         if(writehistail->txn->onconflicthead){
                         writehistail->txn->onconflicttail->next = conflict;
                         writehistail->txn->onconflicttail = conflict;
@@ -641,6 +669,7 @@ void Row_mv2pl::retire(TxnManager * txn, row_t * row) {
             conflict->txn_id = entry->txn->get_txn_id();
             conflict->abort_cnt = entry->txn->abort_cnt;
             conflict->next = NULL;
+            conflict->type = 0;
             if(whis->txn->onconflicthead){
               whis->txn->onconflicttail->next = conflict;
               whis->txn->onconflicttail = conflict;
@@ -701,6 +730,7 @@ void Row_mv2pl::retire(TxnManager * txn, row_t * row) {
                 conflict->txn_id = entry->txn->get_txn_id();
                 conflict->abort_cnt = entry->txn->abort_cnt;
                 conflict->next = NULL;
+                conflict->type = 1;
                 if(writehistail->txn->onconflicthead){
                 writehistail->txn->onconflicttail->next = conflict;
                 writehistail->txn->onconflicttail = conflict;
@@ -784,6 +814,7 @@ void Row_mv2pl::clean_wait(TxnManager * txn, lock_t type){
                     conflict->txn_id = entry->txn->get_txn_id();
                     conflict->abort_cnt = entry->txn->abort_cnt;
                     conflict->next = NULL;
+                    conflict->type = 1;
                     if(writehistail->txn->onconflicthead){
                     writehistail->txn->onconflicttail->next = conflict;
                     writehistail->txn->onconflicttail = conflict;

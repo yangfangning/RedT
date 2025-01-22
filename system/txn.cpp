@@ -1443,8 +1443,11 @@ void TxnManager::cleanup(yield_func_t &yield, RC rc, uint64_t cor_id) {
     ONCONFLICT * oncof2;
     while(oncof!=NULL){
 		//这里通过事务id找到这个事务，这个事务一定还在事务表中，如果事务的回滚次数还能对上，并且该事务的inconflict还是大于0的，就设为-1
-		
+#if NEW_ABORT
+		if(rc == RCOK || oncof->type != 0 ){
+#else		
 		if(rc == RCOK){
+#endif
 			DEBUG_T("txn %ld clean onconflict co %ld \n", this->get_txn_id(), oncof->txn_id);
 			txn_table.clear_onconflict_co(this->get_thd_id(),oncof->txn_id, 0, oncof->abort_cnt);
 		}else{

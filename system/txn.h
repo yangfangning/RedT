@@ -132,6 +132,7 @@ public:
 struct ONCONFLICT {
   uint64_t txn_id;
   uint64_t abort_cnt;
+  int type;//type:0代表脏读的事务，type:1代表脏写的事务(等待该事务上写锁的事务)，type ：2(等待该事务读锁提交的事务)。如果type为0，该事务根据前面的事务回滚而回滚，提交而提交，如果type为1，该事务只需要接触依赖，而不需要进行回滚，如果type为2，与type为1相同。
   ONCONFLICT * next;
 };
 

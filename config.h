@@ -184,8 +184,9 @@
 //新增的并发控制MV_NO_WAIT，MV_WOUND_WAIT,MV_WAIT_DIE,MV_DL_DETECT
 #define CC_ALG MV_WOUND_WAIT
 
-#define CLV CLV1
+#define CLV CLV4
 #define NEW_COMMIT_TIME true //提交时间戳在发送prepare消息时由协调者直接确定，不需要再由参与者共同产出
+#define NEW_ABORT true
 
 #define YCSB_ABORT_MODE false
 #define QUEUE_C  APACITY_NEW 1000000
