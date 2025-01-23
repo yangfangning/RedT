@@ -1166,6 +1166,7 @@ def ycsb_writes():
     tapir=['false']
     early=['false']
     clvs=['CLV1','CLV2','CLV3', 'CLV4']
+    new_aborts=['false','true']
     base_table_size=1048576
     # txn_write_perc = [0.0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1.0]
     txn_write_perc = [1]
@@ -1174,8 +1175,8 @@ def ycsb_writes():
     load = [10000]
     tcnt = [10]
     skew = [0.2]
-    fmt = ["WORKLOAD","NODE_CNT","CC_ALG","SYNTH_TABLE_SIZE","TUP_WRITE_PERC","CLV","TXN_WRITE_PERC","MAX_TXN_IN_FLIGHT","USE_TAPIR","EARLY_PREPARE","ZIPF_THETA","THREAD_CNT"]
-    exp = [[wl,n,algo,base_table_size*n,tup_wr_perc,clv,txn_wr_perc,ld,ir,er,sk,thr] for algo,thr,txn_wr_perc,tup_wr_perc,ld,n,sk,ir,er,clv in itertools.product(algos,tcnt,txn_write_perc,tup_write_perc,load,nnodes,skew,tapir,early,clvs)]
+    fmt = ["WORKLOAD","NODE_CNT","CC_ALG","SYNTH_TABLE_SIZE","TUP_WRITE_PERC","CLV","TXN_WRITE_PERC","MAX_TXN_IN_FLIGHT","USE_TAPIR","EARLY_PREPARE","ZIPF_THETA","THREAD_CNT","NEW_ABORT"]
+    exp = [[wl,n,algo,base_table_size*n,tup_wr_perc,clv,txn_wr_perc,ld,ir,er,sk,thr,new_abort] for algo,thr,txn_wr_perc,tup_wr_perc,ld,n,sk,ir,er,clv,new_abort in itertools.product(algos,tcnt,txn_write_perc,tup_write_perc,load,nnodes,skew,tapir,early,clvs,new_aborts)]
     return fmt,exp
 
 def ycsb_skew():
@@ -1185,6 +1186,7 @@ def ycsb_skew():
     clvs=['CLV1','CLV2','CLV3', 'CLV4']
     tapir=['false']
     early=['false']
+    new_aborts=['false','true']
     
     # base_table_size=1048576*10
     base_table_size=1048576
@@ -1197,8 +1199,8 @@ def ycsb_skew():
     tcnt = [10]  #THREAD_CNT
     #skew = [0.2]
     skew = [0.0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9]
-    fmt = ["WORKLOAD","NODE_CNT","CC_ALG","SYNTH_TABLE_SIZE","TUP_WRITE_PERC","CLV","TXN_WRITE_PERC","MAX_TXN_IN_FLIGHT","USE_TAPIR","EARLY_PREPARE","ZIPF_THETA","THREAD_CNT"]
-    exp = [[wl,n,algo,base_table_size*n,tup_wr_perc,clv,txn_wr_perc,ld,ir,er,sk,thr] for thr,txn_wr_perc,tup_wr_perc,ld,n,algo,sk,ir,er,clv in itertools.product(tcnt,txn_write_perc,tup_write_perc,load,nnodes,algos,skew,tapir,early,clvs)]
+    fmt = ["WORKLOAD","NODE_CNT","CC_ALG","SYNTH_TABLE_SIZE","TUP_WRITE_PERC","CLV","TXN_WRITE_PERC","MAX_TXN_IN_FLIGHT","USE_TAPIR","EARLY_PREPARE","ZIPF_THETA","THREAD_CNT","NEW_ABORT"]
+    exp = [[wl,n,algo,base_table_size*n,tup_wr_perc,clv,txn_wr_perc,ld,ir,er,sk,thr,new_abort] for thr,txn_wr_perc,tup_wr_perc,ld,n,algo,sk,ir,er,clv,new_abort in itertools.product(tcnt,txn_write_perc,tup_write_perc,load,nnodes,algos,skew,tapir,early,clvs,new_aborts)]
     return fmt,exp
 
 def ycsb_network_delay():
@@ -1206,6 +1208,7 @@ def ycsb_network_delay():
     nnodes = [3]
     algos=['MV_WOUND_WAIT','MV_NO_WAIT']
     clvs=['CLV1','CLV2','CLV3', 'CLV4']
+    new_aborts=['false','true']
     tapir=['false']
     early=['false']
     base_table_size=1048576
@@ -1221,8 +1224,8 @@ def ycsb_network_delay():
     # cross_dc_perc = [0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1.0] 
 
 
-    fmt = ["WORKLOAD","NODE_CNT","CC_ALG","SYNTH_TABLE_SIZE","TUP_WRITE_PERC","TXN_WRITE_PERC","MAX_TXN_IN_FLIGHT","USE_TAPIR","EARLY_PREPARE","ZIPF_THETA","THREAD_CNT","CROSS_DC_TXN_PERC", "NETWORK_DELAY","CLV"]
-    exp = [[wl,n,algo,base_table_size*n,tup_wr_perc,txn_wr_perc,ld,ir,er,sk,thr,cro_dc_perc,net_del,clv] for thr,txn_wr_perc,tup_wr_perc,ld,n,sk,algo,cro_dc_perc,net_del,ir,er,clv in itertools.product(tcnt,txn_write_perc,tup_write_perc,load,nnodes,skew,algos,cross_dc_perc,network_delay,tapir,early,clvs)]
+    fmt = ["WORKLOAD","NODE_CNT","CC_ALG","SYNTH_TABLE_SIZE","TUP_WRITE_PERC","TXN_WRITE_PERC","MAX_TXN_IN_FLIGHT","USE_TAPIR","EARLY_PREPARE","ZIPF_THETA","THREAD_CNT","CROSS_DC_TXN_PERC", "NETWORK_DELAY","CLV",,"NEW_ABORT"]
+    exp = [[wl,n,algo,base_table_size*n,tup_wr_perc,txn_wr_perc,ld,ir,er,sk,thr,cro_dc_perc,net_del,clv,new_abort] for thr,txn_wr_perc,tup_wr_perc,ld,n,sk,algo,cro_dc_perc,net_del,ir,er,clv,new_abort in itertools.product(tcnt,txn_write_perc,tup_write_perc,load,nnodes,skew,algos,cross_dc_perc,network_delay,tapir,early,clvs,new_aborts)]
     return fmt,exp
 
 def ycsb_hot():
@@ -1255,6 +1258,7 @@ def ycsb_cross_dc():
     nnodes = [3]
     algos=['MV_WOUND_WAIT','MV_NO_WAIT']
     clvs=['CLV1','CLV2','CLV3', 'CLV4']
+    new_aborts=['false','true']
     tapir=['false']
     early=['false']
     hot = 'HOT'
@@ -1271,8 +1275,8 @@ def ycsb_cross_dc():
     # cross_dc_perc = [0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1.0] 
 
 
-    fmt = ["WORKLOAD","NODE_CNT","CC_ALG","SYNTH_TABLE_SIZE","TUP_WRITE_PERC","TXN_WRITE_PERC","MAX_TXN_IN_FLIGHT","USE_TAPIR","EARLY_PREPARE","ACCESS_PERC","THREAD_CNT","MPR", "NETWORK_DELAY","CLV","SKEW_METHOD"]
-    exp = [[wl,n,algo,base_table_size*n,tup_wr_perc,txn_wr_perc,ld,ir,er,acess_perc,thr,mpr,net_del,clv,hot] for thr,txn_wr_perc,tup_wr_perc,ld,n,acess_perc,algo,mpr,net_del,ir,er,clv in itertools.product(tcnt,txn_write_perc,tup_write_perc,load,nnodes,acess_perc,algos,mpr,network_delay,tapir,early,clvs)]
+    fmt = ["WORKLOAD","NODE_CNT","CC_ALG","SYNTH_TABLE_SIZE","TUP_WRITE_PERC","TXN_WRITE_PERC","MAX_TXN_IN_FLIGHT","USE_TAPIR","EARLY_PREPARE","ACCESS_PERC","THREAD_CNT","MPR", "NETWORK_DELAY","CLV","SKEW_METHOD","NEW_ABORT"]
+    exp = [[wl,n,algo,base_table_size*n,tup_wr_perc,txn_wr_perc,ld,ir,er,acess_perc,thr,mpr,net_del,clv,hot,new_abort] for thr,txn_wr_perc,tup_wr_perc,ld,n,acess_perc,algo,mpr,net_del,ir,er,clv,new_abort in itertools.product(tcnt,txn_write_perc,tup_write_perc,load,nnodes,acess_perc,algos,mpr,network_delay,tapir,early,clvs,new_aborts)]
     return fmt,exp
 
 def tpcc_cross_dc():
@@ -1280,6 +1284,7 @@ def tpcc_cross_dc():
     nnodes = [3]
     nalgos=['MV_WOUND_WAIT','MV_NO_WAIT']
     clvs=['CLV1','CLV2','CLV3', 'CLV4']
+    new_aborts=['false','true']
     npercpay=[0.0]
     wh=64
     mpr = [0.0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1.0]
@@ -1289,8 +1294,8 @@ def tpcc_cross_dc():
     #load = [1000]
     tcnt = [10]
     ctcnt = [4]
-    fmt = ["WORKLOAD","NODE_CNT","CC_ALG","PERC_PAYMENT","NUM_WH","MAX_TXN_IN_FLIGHT","THREAD_CNT","CLIENT_THREAD_CNT","CLV","MPR"]
-    exp = [[wl,n,cc,pp,wh*n,tif,thr,cthr,clv,mpr] for thr,cthr,tif,pp,n,cc,clv,mpr in itertools.product(tcnt,ctcnt,load,npercpay,nnodes,nalgos,clvs,mpr)]
+    fmt = ["WORKLOAD","NODE_CNT","CC_ALG","PERC_PAYMENT","NUM_WH","MAX_TXN_IN_FLIGHT","THREAD_CNT","CLIENT_THREAD_CNT","CLV","MPR","NEW_ABORT"]
+    exp = [[wl,n,cc,pp,wh*n,tif,thr,cthr,clv,mpr,new_abort] for thr,cthr,tif,pp,n,cc,clv,mpr,new_abort in itertools.product(tcnt,ctcnt,load,npercpay,nnodes,nalgos,clvs,mpr,new_aborts)]
     return fmt,exp
 
 
@@ -1299,6 +1304,7 @@ def tpcc_wh():
     nnodes = [3]
     nalgos=['MV_WOUND_WAIT','MV_NO_WAIT']
     clvs=['CLV1','CLV2','CLV3', 'CLV4']
+    new_aborts=['false','true']
     npercpay=[0.0]
     wh=[10,20,30,40,50,60,70,80,100]
     # wh=64
@@ -1307,8 +1313,8 @@ def tpcc_wh():
     #load = [1000]
     tcnt = [10]
     ctcnt = [4]
-    fmt = ["WORKLOAD","NODE_CNT","CC_ALG","PERC_PAYMENT","NUM_WH","MAX_TXN_IN_FLIGHT","THREAD_CNT","CLIENT_THREAD_CNT","CLV"]
-    exp = [[wl,n,cc,pp,wh*n,tif,thr,cthr,clv] for thr,cthr,tif,pp,n,cc,clv,wh in itertools.product(tcnt,ctcnt,load,npercpay,nnodes,nalgos,clvs,wh)]
+    fmt = ["WORKLOAD","NODE_CNT","CC_ALG","PERC_PAYMENT","NUM_WH","MAX_TXN_IN_FLIGHT","THREAD_CNT","CLIENT_THREAD_CNT","CLV","NEW_ABORT"]
+    exp = [[wl,n,cc,pp,wh*n,tif,thr,cthr,clv,new_abort] for thr,cthr,tif,pp,n,cc,clv,wh,new_abort in itertools.product(tcnt,ctcnt,load,npercpay,nnodes,nalgos,clvs,wh,new_aborts)]
     return fmt,exp
 
 def tpcc_neworder_payment():
