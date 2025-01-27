@@ -432,17 +432,20 @@ RC row_t::get_row_post_wait(access_t type, TxnManager * txn, row_t *& row) {
 #elif CC_ALG == MV_WOUND_WAIT || CC_ALG == MV_WAIT_DIE || CC_ALG == MV_NO_WAIT
 	assert(txn->lock_ready);
 	row = txn->cur_row;
+	DEBUG_T("txn %ld cur_row:last_row %lx:%lx\n",txn->get_txn_id(),(uint64_t)row,(uint64_t)this);
 	assert(row->get_data() != NULL);
 	assert(row->get_table() != NULL);
 	assert(row->get_schema() == this->get_schema());
 	assert(row->get_table_name() != NULL);
 	if (type == WR) {
+		DEBUG_T("row_t::get_row MVCC alloc \n");
+		DEBUG_T("txn %ld access->data: %lx\n",txn->get_txn_id(),(uint64_t)row);
 		row_t * newr = (row_t *) mem_allocator.alloc(row_t::get_row_size(tuple_size));
 		newr->init(this->get_table(), get_part_id());
 		INC_STATS(txn->get_thd_id(), trans_cur_row_init_time, get_sys_clock() - init_time);
 		uint64_t copy_time = get_sys_clock();
-			newr->copy(row);
-			row = newr;
+		newr->copy(row);
+		row = newr;
 		INC_STATS(txn->get_thd_id(), trans_cur_row_copy_time, get_sys_clock() - copy_time);
 	}
 #elif CC_ALG == MVCC || CC_ALG == TIMESTAMP || CC_ALG == SSI

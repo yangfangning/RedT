@@ -100,14 +100,17 @@ RC Row_mv2pl::access(TxnManager * txn, lock_t type, row_t * row) {
 	//统计相关信息的，等到需要实验时解决
     INC_STATS(txn->get_thd_id(), trans_access_lock_wait_time, get_sys_clock() - starttime);
 	//查看是否有拥有者
-    bool conflict = (owner != NULL);
 	//如果是读操作
     if (type == DLOCK_SH) {//读一定是可以读到的，就是可能会等待前面事务确定
         //先推高本地最大读时间戳，由于本地最大最大读时间戳一定式是小于当前时间的，所以后来的写事物的本地提交时间戳一定大于这个读时间戳，所以本地时间戳不保存了
 		//找到版本链最新数据
+        if(owner && owner->txn->get_rc() == Abort){
+            release_2pl_entry(owner);
+            owner = NULL;
+        }
         DEBUG_T("txn %ld access read\n",txn->get_txn_id());
         Mv2plhisEntry * whis =  writehistail;
-        if(conflict) {
+        if(owner) {
             //有上锁事务，
             if (whis == NULL || whis->ts < start_ts){//可能能读到未提交的数据
                 //当本地时间戳没确定时直接跳过，说明处于运行状态，当确定后还小于开始时间戳，等待，本地提交时间戳大于开始时间戳的话说明读不到新建的版本，跳过，对于终止的事务，终止时是状态先确定还是
@@ -132,6 +135,54 @@ RC Row_mv2pl::access(TxnManager * txn, lock_t type, row_t * row) {
                     rc = WAIT;
                     goto final;
                 }
+            }
+        }else if (waiters_read_head)
+        {
+            Mv2plEntry * entry;
+            while (waiters_read_head){
+                LIST_GET_HEAD(waiters_read_head, waiters_read_tail, entry );
+                if(entry->txn->get_rc() != Abort){
+                
+                    ts_t ts = entry->start_ts;
+                    Mv2plhisEntry * whis =  writehistail;
+                    while (whis != NULL && whis->ts > ts) {
+                        whis = whis->next;
+                    }
+                    entry->txn->cur_row = (whis == NULL) ? _row : whis->row;
+                    DEBUG_T("txn %ld cur_row %lx\n",entry->txn->get_txn_id(),(uint64_t)entry->txn->cur_row);
+                    //这里唤醒后应该加依赖的
+#if CLV == CLV2 || CLV == CLV3 || CLV == CLV4
+                    if( whis && !whis->commited){
+                        //读的数据不为空,且没提交增加依赖
+                        //前驱事务加依赖
+                        ONCONFLICT * conflict = whis->txn->creat_on_entry();
+                        conflict->txn_id = entry->txn->get_txn_id();
+                        conflict->abort_cnt = entry->txn->abort_cnt;
+                        conflict->next = NULL;
+                        conflict->type = 0;
+                        if(whis->txn->onconflicthead){
+                        whis->txn->onconflicttail->next = conflict;
+                        whis->txn->onconflicttail = conflict;
+                        }else{
+                        whis->txn->onconflicttail = conflict;
+                        whis->txn->onconflicthead = conflict;
+                        }
+                        //后继事务加依赖
+                        //assert(entry->txn->inconflict >= 0);
+                        ATOM_CAS(entry->txn->prep_ready,true,false);
+                        entry->txn->incr_pr();
+                        DEBUG_T("txn %ld add inconflict %ld \n", entry->txn->get_txn_id(),whis->txn->get_txn_id());
+                    }
+#endif 
+                }
+                if (entry->txn->decr_lr() == 0) {
+                    DEBUG_T("txn %ld need cont run because retire\n", entry->txn->get_txn_id());
+                    if (ATOM_CAS(entry->txn->lock_ready, false, true)) {
+                        txn_table.restart_txn(txn->get_thd_id(), entry->txn->get_txn_id(),entry->txn->get_batch_id());  // 唤醒事务，等待者上位，重新执行事务，
+                    }
+                }
+                release_2pl_entry(entry);
+                waiter_cnt --;
             }
         }
         //只能读到可见的数据，快照读判断读哪一个数据
@@ -165,6 +216,7 @@ RC Row_mv2pl::access(TxnManager * txn, lock_t type, row_t * row) {
         }
 #endif        
         txn->cur_row = ret;
+        DEBUG_T("txn %ld cur_row %lx\n",txn->get_txn_id(),(uint64_t)txn->cur_row);
     } else if (type == DLOCK_EX) {//如果是写操作
         //最大提交时间戳在提交时确定，可见但未提交的不能算，因为有回滚的可能
         DEBUG_T("txn %ld access write\n",txn->get_txn_id());
@@ -179,12 +231,12 @@ RC Row_mv2pl::access(TxnManager * txn, lock_t type, row_t * row) {
 #endif
             goto final;
         }
-        if (conflict){
+        if (owner){
 #if CC_ALG == MV_WOUND_WAIT
             //已经进入提交阶段的不会被wound，只会对正在运行的事务wound
             bool canwound = true;
             //如果请求锁的事务的开始时间戳大于拥有者的时间戳，那么说明应该等待，否则wound
-            if (start_ts > owner->start_ts){
+            if (owner->txn->get_rc() == RCOK && start_ts > owner->start_ts){
                 canwound = false;
             }
             //如果事务可以wound且没有进入其他状态，就放入等待队列中，然后从等待队列中取出。如果不可以wound，就加入等待队列中.如果可以wound但是进入了其他状态，就回滚
@@ -224,9 +276,11 @@ RC Row_mv2pl::access(TxnManager * txn, lock_t type, row_t * row) {
                         release_2pl_entry(entry);
                         continue;
                     }else{
+                        assert(entry->start_ts > max_retire_cts);
                         owner = entry;
                         row_t * ret = (writehistail == NULL) ? _row : writehistail->row;
-                        txn->cur_row = ret;
+                        entry->txn->cur_row = ret;
+                        DEBUG_T("txn %ld cur_row %lx\n",entry->txn->get_txn_id(),(uint64_t)entry->txn->cur_row);
                         Mv2plhisEntry * whis =  writehistail;
 #if CLV == CLV2 || CLV == CLV3  || CLV == CLV4
                         if( whis && !whis->commited){
@@ -256,19 +310,47 @@ RC Row_mv2pl::access(TxnManager * txn, lock_t type, row_t * row) {
                 } 
                 while (waiters_read_head){
                     LIST_GET_HEAD(waiters_read_head, waiters_read_tail, entry);
+                    if(entry->txn->get_rc() != Abort){
                     //统计信息
-                    uint64_t timespan = get_sys_clock() - entry->txn->twopl_wait_start;
-                    entry->txn->twopl_wait_start = 0;
-                    entry->txn->txn_stats.cc_block_time += timespan;
-                    entry->txn->txn_stats.cc_block_time_short += timespan;
-                    INC_STATS(txn->get_thd_id(), twopl_wait_time, timespan);
-                    //设置唤醒后事务的要获取的行数据，快照读数据
-                    ts_t ts = entry->start_ts;
-                    Mv2plhisEntry * whis =  writehistail;
-                    while (whis != NULL && whis->ts > ts) {
-                        whis = whis->next;
+                        uint64_t timespan = get_sys_clock() - entry->txn->twopl_wait_start;
+                        entry->txn->twopl_wait_start = 0;
+                        entry->txn->txn_stats.cc_block_time += timespan;
+                        entry->txn->txn_stats.cc_block_time_short += timespan;
+                        INC_STATS(txn->get_thd_id(), twopl_wait_time, timespan);
+                        //设置唤醒后事务的要获取的行数据，快照读数据
+                        ts_t ts = entry->start_ts;
+                        Mv2plhisEntry * whis =  writehistail;
+                        while (whis != NULL && whis->ts > ts) {
+                            whis = whis->next;
+                        }
+                        entry->txn->cur_row = (whis == NULL) ? _row : whis->row;
+                        DEBUG_T("txn %ld cur_row %lx\n",entry->txn->get_txn_id(),(uint64_t)entry->txn->cur_row);
+#if CLV == CLV2 || CLV == CLV3 || CLV == CLV4
+                        if( whis && !whis->commited){
+                            //读的数据不为空,且没提交增加依赖
+                            //前驱事务加依赖
+                            ONCONFLICT * conflict = whis->txn->creat_on_entry();
+                            conflict->txn_id = entry->txn->get_txn_id();
+                            conflict->abort_cnt = entry->txn->abort_cnt;
+                            conflict->next = NULL;
+                            conflict->type = 0;
+                            if(whis->txn->onconflicthead){
+                            whis->txn->onconflicttail->next = conflict;
+                            whis->txn->onconflicttail = conflict;
+                            }else{
+                            whis->txn->onconflicttail = conflict;
+                            whis->txn->onconflicthead = conflict;
+                            }
+                            //后继事务加依赖
+                            //assert(entry->txn->inconflict >= 0);
+                            ATOM_CAS(entry->txn->prep_ready,true,false);
+                            entry->txn->incr_pr();
+                            DEBUG_T("txn %ld add inconflict %ld \n", entry->txn->get_txn_id(),whis->txn->get_txn_id());
+                        }
+#endif 
+                        
                     }
-                    entry->txn->cur_row = (whis == NULL) ? _row : whis->row;
+
                     if (entry->txn->decr_lr() == 0) {
                         if (ATOM_CAS(entry->txn->lock_ready, false, true)) {
                             DEBUG_T("txn %ld need cont run read\n", entry->txn->get_txn_id());
@@ -357,6 +439,7 @@ RC Row_mv2pl::access(TxnManager * txn, lock_t type, row_t * row) {
             owner = entry;
             row_t * ret = (writehistail == NULL) ? _row : writehistail->row;
             txn->cur_row = ret;
+            DEBUG_T("txn %ld cur_row %lx\n",entry->txn->get_txn_id(),(uint64_t)entry->txn->cur_row);
 #if CLV == CLV2 || CLV == CLV3 || CLV == CLV4
                 Mv2plhisEntry * whis = writehistail;
                 if( whis && !whis->commited){       
@@ -422,18 +505,85 @@ void Row_mv2pl::lock_release(TxnManager * txn, lock_t type){
 #if CLV == CLV2 || CLV == CLV3  || CLV == CLV4
         //判断回滚的事务是否是拥有者，是的话不用清理历史了，否则要清理历史
         //不是拥有者
+#if NEW_ABORT
+    if(owner && owner->txn->get_txn_id() == txn->get_txn_id()){
+        owner = NULL;
+        release_2pl_entry(retire);
+    }else if(retire_head){
+        DEBUG_T("级联终止 \n");
+        DEBUG_T("txn %ld not owner\n", txn->get_txn_id());
+        Mv2plhisEntry * entry = retire_head;
+        //退休的头不一定存在，因为可能在退休之前就被wound了
+        if(txn->get_txn_id() == retire_head->txn->get_txn_id()){
+            DEBUG_T("update retire_head\n");
+            retire_head = entry->prev;
+        }else{   
+            while (entry != NULL && entry->txn->get_txn_id() != txn->get_txn_id() ) {
+            //说明这个事务在这行上写的历史已经被清理，不需要进行其他操作了，也不需要唤醒等待者
+                entry = entry->prev;
+            }
+            if(entry){
+                assert(entry->next);
+                //由于该事务不是退休者的头，如果其prev不为空的话，其prev应该将添加到next的依赖中，并且要将inconflic加一
+                TxnManager * txn_update = NULL;
+                if(entry->prev != NULL){
+                    txn_update = entry->prev->txn;
+                }else if (owner){
+                    txn_update = owner->txn;
+                }
+                if(txn_update && txn_update->inconflict >= 0){
+                    ONCONFLICT * conflict = entry->next->txn->creat_on_entry();
+                    conflict->txn_id = txn_update->get_txn_id();
+                    conflict->abort_cnt = txn_update->abort_cnt;
+                    conflict->next = NULL;
+                    conflict->type = 1;
+                    if(entry->next->txn->onconflicthead){
+                        entry->next->txn->onconflicttail->next = conflict;
+                        entry->next->txn->onconflicttail = conflict;
+                    }else{
+                        entry->next->txn->onconflicttail = conflict;
+                        entry->next->txn->onconflicthead = conflict;
+                    }
+                    //后继事务加依赖
+                    ATOM_CAS(txn_update->prep_ready,true,false);
+                    txn_update->incr_pr();
+                    DEBUG_T("txn %ld inconflict %ld num: %d \n", txn_update->get_txn_id(),entry->next->txn->get_txn_id(), txn_update->inconflict);
+                }
+
+            }
+        }
+        if(entry){
+
+        
+            if(entry->next == NULL){
+                writehis = entry->prev;
+            }
+            if (entry->prev == NULL)
+            {
+                writehistail = entry->next;
+                if(writehistail){
+                    max_retire_cts = writehistail->ts;
+                }else{
+                    max_retire_cts = max_cts;
+                }
+            }
+            LIST_REMOVE(entry);
+            release_2pl_hisentry2(entry);
+            whis_len--;//历史长度减一
+        }
+
+    }
+            
+#else
         if (owner == NULL || txn->get_txn_id() != owner->txn->get_txn_id()){
-            DEBUG_T("级联终止 %ld\n");
+            DEBUG_T("级联终止 \n");
             DEBUG_T("txn %ld not owner\n", txn->get_txn_id());
             //处理退休的头，如果回滚的事务时退休的头，需要将退休的头更新为空，因为回滚会导致后面的事务以及拥有者都回滚，如果头不是当前事务，说明当前事务是在退休的头后面的事务，或者已经被清理了，退休的头已经更新了。
             Mv2plhisEntry * entry = retire_head;
             if(retire_head && txn->get_txn_id() == retire_head->txn->get_txn_id()){//如果退休的头是回滚的事务，需要将后续的事务进行回滚
                 DEBUG_T("update retire_head\n");
-#if NEW_ABORT
-                retire_head = entry->prev;
-#else
+
                 retire_head = NULL; 
-#endif
             }else if (retire_head)//如果退休的头不是回滚的事务，找到回滚的事务是哪个
             {
                 while (entry != NULL && entry->txn->get_txn_id() != txn->get_txn_id() ) {
@@ -446,29 +596,13 @@ void Row_mv2pl::lock_release(TxnManager * txn, lock_t type){
             if (entry){
                 DEBUG_T("cleanr history\n");     
                 //历史没有被清理，找到了这个事务，解除依赖，并将后续历史给清理了
-#if NEW_ABORT
-                if(entry->next == NULL){
-                    writehis = entry->prev;
-                }
-                if (entry->prev == NULL)
-                {
-                    writehistail = entry->next;
-                    if(writehistail){
-                        max_retire_cts = writehistail->ts;
-                    }else{
-                        max_retire_cts = 0;
-                    }
-                }
-                LIST_REMOVE(entry);
-                release_2pl_hisentry2(entry);
-                whis_len--;//历史长度减一
-#else
                 if (entry->next == NULL){
                   writehistail = NULL;
                   writehis = NULL;
+                  max_retire_cts = max_cts;
                 }else{
                   writehistail = entry->next;
-                  max_retire_cts->prev = NULL;
+                  writehistail->prev = NULL;
                   max_retire_cts = entry->next->ts;
                 }
                 Mv2plhisEntry * prev;
@@ -489,13 +623,12 @@ void Row_mv2pl::lock_release(TxnManager * txn, lock_t type){
                     owner = NULL;
                     release_2pl_entry(retire);
                 }
-#endif
-
             }
         }else{//是拥有者，说明还没退休，删除拥有者即可
             owner = NULL;
             release_2pl_entry(retire);
         }
+#endif
 #else
         owner = NULL;
         release_2pl_entry(retire);
@@ -522,6 +655,7 @@ void Row_mv2pl::lock_release(TxnManager * txn, lock_t type){
                     whis = whis->next;
                 }
                 entry->txn->cur_row = (whis == NULL) ? _row : whis->row;
+                DEBUG_T("txn %ld cur_row %lx\n",entry->txn->get_txn_id(),(uint64_t)entry->txn->cur_row);
                 if (entry->txn->decr_lr() == 0) {
                     if (ATOM_CAS(entry->txn->lock_ready, false, true)) {
                         DEBUG_T("txn %ld need cont run read\n", entry->txn->get_txn_id());
@@ -555,6 +689,7 @@ void Row_mv2pl::lock_release(TxnManager * txn, lock_t type){
                     owner = entry;
                     //设置唤醒后事务的要获取的行数据
                     entry->txn->cur_row = (writehistail == NULL) ? _row : writehistail->row;
+                    DEBUG_T("txn %ld cur_row %lx\n",entry->txn->get_txn_id(),(uint64_t)entry->txn->cur_row);
 #if CLV == CLV2 || CLV == CLV3 || CLV == CLV4
                     if( writehistail && !writehistail->commited){
                         //读的数据不为空,且没提交增加依赖
@@ -572,7 +707,7 @@ void Row_mv2pl::lock_release(TxnManager * txn, lock_t type){
                         writehistail->txn->onconflicthead = conflict;
                         }
                         //后继事务加依赖
-                        assert(entry->txn->inconflict >= 0);
+                        //assert(entry->txn->inconflict >= 0);
                         ATOM_CAS(entry->txn->prep_ready,true,false);
                         entry->txn->incr_pr();
                         DEBUG_T("txn %ld add inconflict %ld \n", entry->txn->get_txn_id(),writehistail->txn->get_txn_id());
@@ -611,9 +746,12 @@ void Row_mv2pl::lock_release(TxnManager * txn, lock_t type){
     if (g_central_man) glob_manager.release_row(_row);
     else pthread_mutex_unlock( latch );
 }
+
+
+
 //退休函数，可见操作后，将事务从拥有者变为退休者，只有写操作才会调用，将等待队列中的读事务全部重新执行，写事务只能唤醒一个
 void Row_mv2pl::retire(TxnManager * txn, row_t * row) {  
-    DEBUG_T("txn %ld retire in %lx\n", txn->get_txn_id(),(uint64_t)row);
+    DEBUG_T("txn %ld retire in %lx\n", txn->get_txn_id(),(uint64_t)this);
     //这里要唤醒等待者
     uint64_t starttime = get_sys_clock();
     if (g_central_man)
@@ -648,42 +786,45 @@ void Row_mv2pl::retire(TxnManager * txn, row_t * row) {
 
     while (waiters_read_head){
         LIST_GET_HEAD(waiters_read_head, waiters_read_tail, entry );
-        uint64_t timespan = get_sys_clock() - entry->txn->twopl_wait_start;
-        entry->txn->twopl_wait_start = 0;
-        entry->txn->txn_stats.cc_block_time += timespan;
-        entry->txn->txn_stats.cc_block_time_short += timespan;
-        INC_STATS(txn->get_thd_id(), twopl_wait_time, timespan);
-        //设置唤醒后事务的要获取的行数据
-        ts_t ts = entry->start_ts;
-        Mv2plhisEntry * whis =  writehistail;
-        while (whis != NULL && whis->ts > ts) {
-            whis = whis->next;
-        }
-        entry->txn->cur_row = (whis == NULL) ? _row : whis->row;
-        //这里唤醒后应该加依赖的
-#if CLV == CLV2 || CLV == CLV3 || CLV == CLV4
-        if( whis && !whis->commited){
-            //读的数据不为空,且没提交增加依赖
-            //前驱事务加依赖
-            ONCONFLICT * conflict = whis->txn->creat_on_entry();
-            conflict->txn_id = entry->txn->get_txn_id();
-            conflict->abort_cnt = entry->txn->abort_cnt;
-            conflict->next = NULL;
-            conflict->type = 0;
-            if(whis->txn->onconflicthead){
-              whis->txn->onconflicttail->next = conflict;
-              whis->txn->onconflicttail = conflict;
-            }else{
-              whis->txn->onconflicttail = conflict;
-              whis->txn->onconflicthead = conflict;
+        if(entry->txn->get_rc()!= Abort){
+            uint64_t timespan = get_sys_clock() - entry->txn->twopl_wait_start;
+            entry->txn->twopl_wait_start = 0;
+            entry->txn->txn_stats.cc_block_time += timespan;
+            entry->txn->txn_stats.cc_block_time_short += timespan;
+            INC_STATS(txn->get_thd_id(), twopl_wait_time, timespan);
+            //设置唤醒后事务的要获取的行数据
+            ts_t ts = entry->start_ts;
+            Mv2plhisEntry * whis =  writehistail;
+            while (whis != NULL && whis->ts > ts) {
+                whis = whis->next;
             }
-            //后继事务加依赖
-            //assert(entry->txn->inconflict >= 0);
-            ATOM_CAS(entry->txn->prep_ready,true,false);
-            entry->txn->incr_pr();
-            DEBUG_T("txn %ld add inconflict %ld \n", entry->txn->get_txn_id(),whis->txn->get_txn_id());
-        }
+            entry->txn->cur_row = (whis == NULL) ? _row : whis->row;
+            DEBUG_T("txn %ld cur_row %lx\n",entry->txn->get_txn_id(),(uint64_t)entry->txn->cur_row);
+            //这里唤醒后应该加依赖的
+#if CLV == CLV2 || CLV == CLV3 || CLV == CLV4
+            if( whis && !whis->commited){
+                //读的数据不为空,且没提交增加依赖
+                //前驱事务加依赖
+                ONCONFLICT * conflict = whis->txn->creat_on_entry();
+                conflict->txn_id = entry->txn->get_txn_id();
+                conflict->abort_cnt = entry->txn->abort_cnt;
+                conflict->next = NULL;
+                conflict->type = 0;
+                if(whis->txn->onconflicthead){
+                whis->txn->onconflicttail->next = conflict;
+                whis->txn->onconflicttail = conflict;
+                }else{
+                whis->txn->onconflicttail = conflict;
+                whis->txn->onconflicthead = conflict;
+                }
+                //后继事务加依赖
+                //assert(entry->txn->inconflict >= 0);
+                ATOM_CAS(entry->txn->prep_ready,true,false);
+                entry->txn->incr_pr();
+                DEBUG_T("txn %ld add inconflict %ld \n", entry->txn->get_txn_id(),whis->txn->get_txn_id());
+            }
 #endif 
+        }
         if (entry->txn->decr_lr() == 0) {
             DEBUG_T("txn %ld need cont run because retire\n", entry->txn->get_txn_id());
             if (ATOM_CAS(entry->txn->lock_ready, false, true)) {
@@ -722,6 +863,7 @@ void Row_mv2pl::retire(TxnManager * txn, row_t * row) {
             owner = entry;
             //设置唤醒后事务的要获取的行数据
             entry->txn->cur_row = writehistail->row;
+            DEBUG_T("txn %ld cur_row %lx\n",entry->txn->get_txn_id(),(uint64_t)entry->txn->cur_row);
 #if CLV == CLV2 || CLV == CLV3 || CLV == CLV4
             if( writehistail && !writehistail->commited){
                 //读的数据不为空,且没提交增加依赖
@@ -764,7 +906,7 @@ void Row_mv2pl::retire(TxnManager * txn, row_t * row) {
  
 }
 void Row_mv2pl::clean_wait(TxnManager * txn, lock_t type){
-    DEBUG_T("txn %ld clean_wait\n", txn->get_txn_id());
+    DEBUG_T("txn %ld clean_wait %lx \n ", txn->get_txn_id(),(uint64_t)this);
     //这里要唤醒等待者
     if (g_central_man)
         glob_manager.lock_row(_row);
@@ -776,7 +918,7 @@ void Row_mv2pl::clean_wait(TxnManager * txn, lock_t type){
     int num = 0;
     if (type == DLOCK_EX) {
       if (txn->lock_ready_cnt == 0) {
-        DEBUG_T("txn %ld already cont run\n", txn->get_txn_id());
+        DEBUG_T("txn %ld write already cont run\n", txn->get_txn_id());
         if (owner && owner->txn->get_txn_id() == txn->get_txn_id()) {
           DEBUG_T("owner %ld need clean\n", txn->get_txn_id());
           // 唤醒后续等待者
@@ -806,6 +948,7 @@ void Row_mv2pl::clean_wait(TxnManager * txn, lock_t type){
               owner = entry;
               // 设置唤醒后事务的要获取的行数据
               entry->txn->cur_row = (writehistail == NULL) ? _row : writehistail->row;
+              DEBUG_T("txn %ld cur_row %lx\n",entry->txn->get_txn_id(),(uint64_t)entry->txn->cur_row);
 #if CLV == CLV2 || CLV == CLV3 || CLV == CLV4
                 if( writehistail && !writehistail->commited){
                     //读的数据不为空,且没提交增加依赖
@@ -823,7 +966,7 @@ void Row_mv2pl::clean_wait(TxnManager * txn, lock_t type){
                     writehistail->txn->onconflicthead = conflict;
                     }
                     //后继事务加依赖
-                    assert(entry->txn->inconflict >= 0);
+                    //assert(entry->txn->inconflict >= 0);
                     ATOM_CAS(entry->txn->prep_ready,true,false);
                     entry->txn->incr_pr();
                     DEBUG_T("txn %ld add inconflict %ld \n", entry->txn->get_txn_id(),writehistail->txn->get_txn_id());
@@ -858,7 +1001,7 @@ void Row_mv2pl::clean_wait(TxnManager * txn, lock_t type){
       }
     } else {
       if (txn->lock_ready_cnt == 0) {
-        DEBUG_T("txn %ld already cont run\n", txn->get_txn_id());
+        DEBUG_T("txn %ld read already cont run\n", txn->get_txn_id());
       } else {
         en = waiters_read_head;
         while (en) {

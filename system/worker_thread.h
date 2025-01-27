@@ -38,6 +38,7 @@ public:
     TxnManager * get_transaction_manager(Message * msg);
     void calvin_wrapup(yield_func_t &yield, uint64_t cor_id);
     RC process_rfin(yield_func_t &yield, Message * msg, uint64_t cor_id);
+    // RC process_rfin_abort(yield_func_t &yield, Message * msg, uint64_t cor_id);
     RC process_rfwd(yield_func_t &yield, Message * msg, uint64_t cor_id);
     RC process_rack_rfin(Message * msg);
     RC process_rack_prep(yield_func_t &yield, Message * msg, uint64_t cor_id);

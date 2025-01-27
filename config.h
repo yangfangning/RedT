@@ -126,7 +126,7 @@
 #define TIME_ENABLE         true //STATS_ENABLE
 
 #define FIN_BY_TIME true
-#define MAX_TXN_IN_FLIGHT 320
+#define MAX_TXN_IN_FLIGHT 10000
 
 #define SERVER_GENERATE_QUERIES false
 
@@ -330,7 +330,7 @@
 #define ACCESS_PERC 0.03
 #define INIT_PARALLELISM 1
 #define SYNTH_TABLE_SIZE 3145728
-#define ZIPF_THETA 0.6
+#define ZIPF_THETA 0.9
 #define TXN_WRITE_PERC 1
 #define TUP_WRITE_PERC 0.5
 #define SCAN_PERC           0
@@ -344,7 +344,7 @@
 #define STRICT_PPT 1
 //only consider the primary replica here,
 //try keep part_per_txn=2 when use CROSS_DC_TXN_PERC
-#define CROSS_DC_TXN_PERC 1.0
+#define CROSS_DC_TXN_PERC 1
 // ==== [TPCC] ====
 // For large warehouse count, the tables do not fit in memory
 // small tpcc schemas shrink the table size.
@@ -359,7 +359,7 @@
 // are not modeled.
 #define TPCC_ACCESS_ALL       false
 #define WH_UPDATE         true
-#define NUM_WH 32
+#define NUM_WH 10
 #define TPCC_INDEX_NUM 700 000 
 // % of transactions that access multiple partitions
 #define MPR 1.0

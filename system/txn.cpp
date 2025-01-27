@@ -665,6 +665,11 @@ RC TxnManager::start_commit(yield_func_t &yield, uint64_t cor_id) {
         this->retire(yield, cor_id);
         this->finish_retire = true;
     }
+#elif NEW_COMMIT_TIME && CLV == CLV3
+    if(this->query->partitions_touched.size() == 1){
+        this->retire(yield, cor_id);
+        this->finish_retire = true;
+    }
 #elif CLV == CLV4
     this->retire(yield, cor_id);
     this->finish_retire = true;
@@ -1308,7 +1313,9 @@ int32_t TxnManager::incr_pr() {
 	//ATOM_ADD(this->rsp_cnt,i);
 	int32_t result;
 	sem_wait(&rsp_mutex);
-	result = ++this->inconflict;
+	if(this->inconflict >= 0){
+		result = ++this->inconflict;
+	}
 	sem_post(&rsp_mutex);
 	return result;
 }
@@ -1587,6 +1594,7 @@ RC TxnManager::get_row_post_wait(row_t *& row_rtn) {
 	uint64_t starttime = get_sys_clock();
 	row_t * row = this->last_row;
 	access_t type = this->last_type;
+	DEBUG_T("txn %ld get: %lx post wait\n",this->get_txn_id(), (uint64_t)row);
 	assert(row != NULL);
 	DEBUG_M("TxnManager::get_row_post_wait access alloc\n")
 	Access * access;

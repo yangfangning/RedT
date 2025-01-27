@@ -343,6 +343,7 @@ enum RemReqType {
     PREP_CONT,
     RACK_PRE_PREP,
     SET_CO_TS,
+    RFIN_ABORT,
   NO_MSG
 };
 

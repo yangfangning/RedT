@@ -158,6 +158,7 @@ void TxnTable::restart_txn(uint64_t thd_id, uint64_t txn_id,uint64_t batch_id){
 #if CC_ALG == CALVIN
       work_queue.enqueue(thd_id,Message::create_message(t_node->txn_man,RTXN),false);
 #else
+      DEBUG_T("txn %ld RESTART_TXN %lx\n",t_node->txn_man->get_txn_id(), (uint64_t)t_node->txn_man->cur_row);
       if(IS_LOCAL(txn_id))
         work_queue.enqueue(thd_id,Message::create_message(t_node->txn_man,RTXN_CONT),false);
       else
@@ -218,7 +219,7 @@ void TxnTable::clear_onconflict_co(uint64_t thd_id, uint64_t txn_id, uint64_t ba
     if(is_matching_txn_node(t_node,txn_id,batch_id)) {
       DEBUG_T("txn %ld inconflict: %d\n",txn_id, t_node->txn_man->inconflict);
       if(t_node->txn_man->abort_cnt == abort_cnt && t_node->txn_man->inconflict > 0){
-        DEBUG_T("txn %ldinconflict: %d need become -1\n",txn_id,t_node->txn_man->inconflict);
+        DEBUG_T("txn %ldinconflict: %d need -1\n",txn_id,t_node->txn_man->inconflict);
         t_node->txn_man->decr_pr();
         if(t_node->txn_man->inconflict == 0){
           //对于提交的事务，只有后续事务的依赖降到0才会将准备返回prepare变为true

@@ -442,13 +442,11 @@ RC WorkerThread::run(yield_func_t &yield, uint64_t cor_id) {
       //   ready = false;
       // }
       // else 
-      #if !USE_TAPIR && !EARLY_PREPARE
-      if(msg->rtype == RFIN && !txn_man->finish_read_write) ready = false;
-      else 
-      ready = txn_man->unset_ready(); 
-      #else
-      ready = txn_man->unset_ready(); 
-      #endif
+      if(msg->rtype == RFIN && txn_man->get_start_timestamp() == UINT64_MAX){
+        ready = false;
+      }else{
+        ready = txn_man->unset_ready(); 
+      }
 
       INC_STATS(get_thd_id(),worker_activate_txn_time,get_sys_clock() - ready_starttime);
       
@@ -457,6 +455,8 @@ RC WorkerThread::run(yield_func_t &yield, uint64_t cor_id) {
         DEBUG_T("txn %ld type %d not ready\n", msg->get_txn_id(),msg->get_rtype());
         work_queue.enqueue(get_thd_id(),msg,true);
         continue;
+      // }else if(msg->rtype == RFIN && (txn_man->get_txn_id() == msg->get_txn_id()) && !txn_man->finish_read_write){
+      //   msg->rtype = RFIN_ABORT;
       }
       txn_man->register_thread(this);
     }
@@ -497,6 +497,24 @@ RC WorkerThread::process_set_co_ts(yield_func_t &yield, Message * msg, uint64_t 
 #endif
   return RCOK;
 }
+
+// RC WorkerThread::process_rfin_abort(yield_func_t &yield, Message * msg, uint64_t cor_id){
+//   DEBUG_T("RFIN_abort %ld from %ld\n",msg->get_txn_id(),msg->return_node_id);
+//   assert(!IS_LOCAL(msg->get_txn_id()));
+//   txn_man->set_rc(((FinishMessage*)msg)->rc);
+//   RC rc = txn_man->get_rc();
+//   assert(rc == Abort);
+//   txn_man->abort_cnt = msg->current_abort_cnt;
+//   txn_man->abort(yield, cor_id);
+//   txn_man->reset();
+//   txn_man->reset_query();
+//   DEBUG_T("%d:%d send abort finish ack to %d\n", g_node_id, msg->get_txn_id(), GET_NODE_ID(msg->get_txn_id()));
+//   // printf("%d:%d send abort finish ack to %d\n", g_node_id, msg->get_txn_id(), GET_NODE_ID(msg->get_txn_id()));  
+//   msg_queue.enqueue(get_thd_id(), Message::create_message(txn_man, RACK_FIN),
+//                     GET_NODE_ID(msg->get_txn_id()));
+//   return Abort;
+// }
+
 
 RC WorkerThread::process_rfin(yield_func_t &yield, Message * msg, uint64_t cor_id) {
   DEBUG_T("RFIN %ld from %ld\n",msg->get_txn_id(),msg->return_node_id);
@@ -593,6 +611,18 @@ RC WorkerThread::process_rlog(yield_func_t &yield, Message * msg, uint64_t cor_i
 
 RC WorkerThread::process_rack_log(yield_func_t &yield, Message * msg, uint64_t cor_id) {
   RC rc = RCOK;
+  if (!txn_man || !(txn_man->txn) || txn_man->abort_cnt != msg->current_abort_cnt) {
+    DEBUG_T("RLOG_ACK skip %ld from %ld\n",msg->get_txn_id(),msg->get_return_id());
+    if(!txn_man){
+      DEBUG_T("RLOG_ACK skip %ld !txn_man\n",msg->get_txn_id());
+    }else if(!(txn_man->txn)){
+      DEBUG_T("RLOG_ACK skip %ld !(txn_man->txn\n",msg->get_txn_id());
+    }else if (txn_man->abort_cnt != msg->current_abort_cnt)
+    {
+      DEBUG_T("RLOG_ACK skip %ld txn_man->abort_cnt != msg->current_abort_cnt\n",msg->get_txn_id());
+    }
+    return RCOK;
+  }
   DEBUG_T("RACK_LOG %ld from %ld\n",msg->get_txn_id(),msg->return_node_id);
   int responses_left = txn_man->received_log_response(((AckMessage*)msg)->rc);
   // if(txn_man->get_return_node() == g_node_id){
@@ -614,7 +644,11 @@ RC WorkerThread::process_rack_log(yield_func_t &yield, Message * msg, uint64_t c
 		if(txn_man->get_return_node() == g_node_id){
       assert(IS_LOCAL(txn_man->get_txn_id()));    
       if(txn_man->get_rsp_cnt() > 0) return WAIT;//如果远程prepare还没回应完，等待
-
+#if CC_ALG == WOUND_WAIT || CC_ALG == MV_WOUND_WAIT
+      if(txn_man->aborted){
+        return WAIT;
+      }
+#endif
 #if CC_ALG == MV_NO_WAIT || CC_ALG == MV_WOUND_WAIT
 #if CLV == CLV2 || CLV == CLV3 || CLV == CLV4
       //验证事务，写完prepare日志后验证
@@ -1261,20 +1295,36 @@ RC WorkerThread::process_rqry_cont(yield_func_t &yield, Message * msg, uint64_t 
   DEBUG_T("RQRY_CONT %ld from %ld\n",msg->get_txn_id(),msg->return_node_id);
   assert(!IS_LOCAL(msg->get_txn_id()));
   //这里设置rc的目的是，当事务已经终止后，事务又重新执行所以判断事务的rc
-  RC rc = txn_man->get_rc();
-  if(rc != Abort){
-    txn_man->run_txn_post_wait();
-    rc = txn_man->run_txn(yield, cor_id);
-  }else{
-    //这种情况是，当本地重新执行后，成为拥有者，但是成为拥有者后被wound，然后重新执行，要吧owner清理了
-    txn_man->clean_wait();
-    txn_man->finish_read_write = true;
+  if (!txn_man || !(txn_man->txn) || txn_man->abort_cnt != msg->current_abort_cnt) {
+    if(!txn_man){
+      DEBUG_T("RQRY_CONT skip %ld !txn_man\n",msg->get_txn_id());
+    }else if(!(txn_man->txn)){
+      DEBUG_T("RQRY_CONT skip %ld !(txn_man->txn\n",msg->get_txn_id());
+    }else if (txn_man->abort_cnt != msg->current_abort_cnt)
+    {
+      DEBUG_T("RQRY_CONT skip %ld txn_man->abort_cnt != msg->current_abort_cnt\n",msg->get_txn_id());
+    }
+    
+    DEBUG_T("RQRY_CONT skip %ld from\n",msg->get_txn_id());
+    return RCOK;
   }
-  // Send response
-  if(rc != WAIT) {
-    msg_queue.enqueue(get_thd_id(),Message::create_message(txn_man,RQRY_RSP),txn_man->return_id);
+  if(!txn_man->aborted){
+    RC rc = txn_man->get_rc();
+    if(rc != Abort){
+      txn_man->run_txn_post_wait();
+      rc = txn_man->run_txn(yield, cor_id);
+    }else{
+      //这种情况是，当本地重新执行后，成为拥有者，但是成为拥有者后被wound，然后重新执行，要吧owner清理了
+      txn_man->clean_wait();
+      txn_man->finish_read_write = true;
+    }
+    // Send response
+    if(rc != WAIT) {
+      msg_queue.enqueue(get_thd_id(),Message::create_message(txn_man,RQRY_RSP),txn_man->return_id);
+    }
   }
-  return rc;
+
+  return RCOK;
 }
 
 
@@ -1283,8 +1333,22 @@ RC WorkerThread::process_rtxn_cont(yield_func_t &yield, Message * msg, uint64_t 
   assert(IS_LOCAL(msg->get_txn_id()));
 
   txn_man->txn_stats.local_wait_time += get_sys_clock() - txn_man->txn_stats.wait_starttime;
-  if(!txn_man || !(txn_man->txn) || !txn_man->query || txn_man->query->partitions_touched.size() == 0) {
+  if(!txn_man || !(txn_man->txn) || !txn_man->query || txn_man->query->partitions_touched.size() == 0 || txn_man->abort_cnt != msg->current_abort_cnt) {
     DEBUG_T("RTXN_CONT skip %ld\n",msg->get_txn_id());
+    if(!txn_man){
+      DEBUG_T("RTXN_CONT skip %ld !txn_man\n",msg->get_txn_id());
+    }else if(!(txn_man->txn)){
+      DEBUG_T("RTXN_CONT skip %ld !(txn_man->txn\n",msg->get_txn_id());
+    }else if (!txn_man->query)
+    {
+      DEBUG_T("RTXN_CONT skip %ld !txn_man->quer\n",msg->get_txn_id());
+    }else if (txn_man->query->partitions_touched.size() == 0)
+    {
+      DEBUG_T("RTXN_CONT skip %ld !txn_man->query\n",msg->get_txn_id());
+    }else if (txn_man->abort_cnt != msg->current_abort_cnt)
+    {
+      DEBUG_T("RTXN_CONT skip %ld txn_man->abort_cnt != msg->current_abort_cnt\n",msg->get_txn_id());
+    }
     return RCOK;
   }
   if(!txn_man->aborted){
